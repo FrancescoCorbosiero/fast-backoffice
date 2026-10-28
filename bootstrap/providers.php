@@ -13,6 +13,7 @@ return [
     App\Modules\Audit\AuditServiceProvider::class,
     App\Modules\Settings\SettingsServiceProvider::class,
     App\Modules\Scheduling\SchedulingServiceProvider::class,
+    App\Modules\Contacts\ContactsServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\HorizonServiceProvider::class,
 ];

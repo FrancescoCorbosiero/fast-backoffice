@@ -70,7 +70,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 ### 4.2 Catalogue
 
-**Kernel** (layer 0, code only). `Money`, quantities and VAT rates as integers; the VAT engine (line nets, per-rate summary, totals); gapless numbering sequences (§5.2); date helpers (no-overflow months, anchor days).
+**Kernel** (layer 0, code only). `Money`, quantities and VAT rates as integers; the VAT engine (line nets, per-rate summary, totals); gapless numbering sequences (§5.2); date helpers (no-overflow months, anchor days); fiscal identifiers (Partita IVA check digit, codice fiscale checksum, VAT number formats by country), used by Settings for the owner and by Contacts for everyone else; the opaque `Reference`.
 
 **Files** (0). Stored files on S3-compatible storage, attached to any record by an opaque owner reference; generated PDFs and XML with checksums.
 
@@ -80,7 +80,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Scheduling** (0). Recurring jobs are defined in code by each module; the database stores only overrides (enabled, schedule) and run history (start, end, real exit code, output). A screen lists them and can run one now.
 
-**Contacts** (1). People and companies; roles (client, supplier…); validated fiscal identity (Partita IVA check digit, codice fiscale checksum, foreign VAT numbers by country); SdI addressing (codice destinatario or PEC); email consent and suppression; merging duplicates. Publishes the `ContactPicker` form component and the `ContactPanel` extension point for the contact page.
+**Contacts** (1). People and companies; roles (client, supplier, partner, other; a contact may hold several); validated fiscal identity (through the Kernel), one live contact per VAT number and per tax code; SdI addressing (`SdiAddress`: codice destinatario, PEC, portal, abroad); email consent and suppression (bounce, complaint, unsubscribe, the owner), with `isMailable()` requiring an address, consent and no suppression; merging duplicates (blanks filled, roles joined, the safer email state kept, the duplicate hidden but kept, `ContactsMerged` dispatched inside the transaction). Contacts are never deleted. Publishes the `ContactPicker` form component and the `ContactPanel` extension point for the contact page.
 
 **Catalog** (2). Sellable services with default price, VAT treatment (rate or natura) and cadence. A template source only: lines are copied into documents, so the catalog never changes an issued document.
 

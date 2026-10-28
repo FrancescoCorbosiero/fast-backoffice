@@ -23,7 +23,7 @@ it('saves the business profile from the form', function (): void {
         ->fillForm([
             'type' => 'company',
             'business_name' => 'Studio Srl',
-            'vat_number' => '01234567890',
+            'vat_number' => '01234567897',
             'regime' => 'RF01',
             'street' => 'Via Roma',
             'street_number' => '1',
@@ -38,7 +38,7 @@ it('saves the business profile from the form', function (): void {
     $profile = app(GetBusinessProfile::class)->get();
 
     expect($profile->displayName())->toBe('Studio Srl')
-        ->and($profile->vatNumber)->toBe('01234567890')
+        ->and($profile->vatNumber)->toBe('01234567897')
         ->and($profile->isComplete())->toBeTrue();
 });
 
@@ -83,4 +83,11 @@ it('rejects a number format without {number}', function (): void {
         ->fillForm(['series' => [['code' => 'invoices', 'label' => 'Fatture', 'format' => '{year}', 'opening_numbers' => []]]])
         ->call('save')
         ->assertHasFormErrors();
+});
+
+it('checks the owner\'s identifiers with the Kernel', function (): void {
+    Livewire::test(BusinessProfilePage::class)
+        ->fillForm(['type' => 'individual', 'first_name' => 'A', 'last_name' => 'B', 'regime' => 'RF19', 'country' => 'IT', 'vat_number' => '01234567890', 'tax_code' => 'RSSMRA85T10A562T'])
+        ->call('save')
+        ->assertHasFormErrors(['vat_number', 'tax_code']);
 });

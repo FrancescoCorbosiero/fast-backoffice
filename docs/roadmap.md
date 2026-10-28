@@ -22,9 +22,11 @@ Notes: the audit trail became its own module (`Audit`, layer 0; design.md §4.2)
 
 ## Phase 1 — Contacts
 
-- [ ] Contacts with roles; fiscal identity validation (Partita IVA, codice fiscale, foreign VAT numbers); SdI addressing; email consent and suppression
-- [ ] `ContactPicker` component; contact page with the `ContactPanel` extension point
-- [ ] Merging duplicates (`ContactsMerged` event)
+- [x] Contacts with roles; fiscal identity validation (Partita IVA, codice fiscale, foreign VAT numbers); SdI addressing; email consent and suppression
+- [x] `ContactPicker` component; contact page with the `ContactPanel` extension point
+- [x] Merging duplicates (`ContactsMerged` event)
+
+Notes: the fiscal identifier validators live in the Kernel (`App\Kernel\Fiscal`), because Settings validates the owner's identity with them too. Contacts are never deleted (documents point at them); duplicates are merged. Import and export of contacts, which hive-crm had, are not in the design and were left out.
 
 ## Phase 2 — Cash
 

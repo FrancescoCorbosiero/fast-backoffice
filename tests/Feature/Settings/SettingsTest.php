@@ -41,8 +41,8 @@ it('saves the business profile and records it in the audit trail', function (): 
         'type' => 'individual',
         'first_name' => 'Mario',
         'last_name' => 'Rossi',
-        'tax_code' => 'rssmra80a01h501u',
-        'vat_number' => '01234567890',
+        'tax_code' => 'rssmra85t10a562s',
+        'vat_number' => '01234567897',
         'regime' => 'RF19',
         'street' => 'Via Roma',
         'street_number' => '1',
@@ -58,7 +58,7 @@ it('saves the business profile and records it in the audit trail', function (): 
     $stored = app(GetBusinessProfile::class)->get();
 
     expect($stored->displayName())->toBe('Mario Rossi')
-        ->and($stored->taxCode)->toBe('RSSMRA80A01H501U')
+        ->and($stored->taxCode)->toBe('RSSMRA85T10A562S')
         ->and($stored->province)->toBe('RM')
         ->and($stored->country)->toBe('IT')
         ->and($stored->isComplete())->toBeTrue()
@@ -66,7 +66,7 @@ it('saves the business profile and records it in the audit trail', function (): 
 
     $entry = app(AuditTrail::class)->latest(1)[0];
     expect($entry->action)->toBe('settings.business_profile.saved')
-        ->and($entry->details['vat_number'])->toBe('01234567890');
+        ->and($entry->details['vat_number'])->toBe('01234567897');
 });
 
 it('names a company by its business name', function (): void {

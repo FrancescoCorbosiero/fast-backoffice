@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Settings\Filament\Pages;
 
+use App\Kernel\Fiscal\CodiceFiscale;
+use App\Kernel\Fiscal\PartitaIva;
 use App\Modules\Settings\Actions\SaveBusinessProfile;
 use App\Modules\Settings\Data\BusinessProfile;
 use App\Modules\Settings\Enums\ProfileType;
 use App\Modules\Settings\Enums\RegimeFiscale;
 use App\Modules\Settings\Queries\GetBusinessProfile;
 use BackedEnum;
+use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -41,8 +44,8 @@ class BusinessProfilePage extends SettingsPage
                     ->hidden(fn (Get $get): bool => $get('type') === ProfileType::Company->value),
                 TextInput::make('last_name')->label('Cognome')->maxLength(60)
                     ->hidden(fn (Get $get): bool => $get('type') === ProfileType::Company->value),
-                TextInput::make('vat_number')->label('Partita IVA')->maxLength(11)->regex('/^\d{11}$/'),
-                TextInput::make('tax_code')->label('Codice fiscale')->maxLength(16)->regex('/^[A-Za-z0-9]{11,16}$/'),
+                TextInput::make('vat_number')->label('Partita IVA')->maxLength(11)->rules([fn (): Closure => self::fiscalRule(PartitaIva::isValid(...), 'La partita IVA non è valida.')]),
+                TextInput::make('tax_code')->label('Codice fiscale')->maxLength(16)->rules([fn (): Closure => self::fiscalRule(CodiceFiscale::isValid(...), 'Il codice fiscale non è valido.')]),
             ]),
             Section::make('Sede')->columns(3)->components([
                 TextInput::make('street')->label('Indirizzo')->maxLength(60)->columnSpan(2),
@@ -69,6 +72,18 @@ class BusinessProfilePage extends SettingsPage
     protected function persist(array $state): void
     {
         app(SaveBusinessProfile::class)->save(BusinessProfile::fromArray($state));
+    }
+
+    /**
+     * @param  Closure(string): bool  $isValid
+     */
+    private static function fiscalRule(Closure $isValid, string $message): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($isValid, $message): void {
+            if (is_string($value) && trim($value) !== '' && ! $isValid($value)) {
+                $fail($message);
+            }
+        };
     }
 
     /**
