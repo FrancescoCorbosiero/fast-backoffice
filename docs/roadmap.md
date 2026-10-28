@@ -8,15 +8,17 @@ After phase 3 the app can already issue invoices (sent manually through the Agen
 
 ## Phase 0 — Foundation
 
-- [ ] Laravel 13 application with a Filament 5 panel; Docker development environment with PostgreSQL 18 and Redis
-- [ ] CI: Pint, Larastan (max), Pest (Unit, Feature, Arch) on PostgreSQL
-- [ ] Module skeleton and the architecture tests for the rules in design.md §4.3
-- [ ] Kernel: `Money`, the VAT engine (port hive-crm's `LineItemsTest`), numbering sequences (gapless, opening number), date helpers (no-overflow months, anchor days)
-- [ ] Single-owner login with two-factor authentication; audit trail
-- [ ] Files (S3-compatible disk)
-- [ ] Settings: business profile, invoice defaults, numbering series
-- [ ] Scheduling: jobs defined in code, overrides and run history in the database, a screen to see and run them
-- [ ] `CLAUDE.md` commands section filled in
+- [x] Laravel 13 application with a Filament 5 panel; Docker development environment with PostgreSQL 18 and Redis
+- [x] CI: Pint, Larastan (max), Pest (Unit, Feature, Arch) on PostgreSQL
+- [x] Module skeleton and the architecture tests for the rules in design.md §4.3
+- [x] Kernel: `Money`, the VAT engine (port hive-crm's `LineItemsTest`), numbering sequences (gapless, opening number), date helpers (no-overflow months, anchor days)
+- [x] Single-owner login with two-factor authentication; audit trail
+- [x] Files (S3-compatible disk)
+- [x] Settings: business profile, invoice defaults, numbering series
+- [x] Scheduling: jobs defined in code, overrides and run history in the database, a screen to see and run them
+- [x] `CLAUDE.md` commands section filled in
+
+Notes: the audit trail became its own module (`Audit`, layer 0; design.md §4.2). Pest 4 instead of Pest 5, because Pest 5 needs PHP 8.4 on every machine that runs the tests; the upgrade is listed in phase 8. The Docker development environment is written but was not built in the session that wrote it (no Docker daemon there): the first `docker compose up` may need a fix.
 
 ## Phase 1 — Contacts
 
@@ -73,4 +75,5 @@ After phase 3 the app can already issue invoices (sent manually through the Agen
 
 - [ ] Production Docker images, Caddy, backups with a restore drill, deploy runbook
 - [ ] Production-safety tests
+- [ ] PHP 8.4 everywhere and Pest 5 (the development toolchain was on 8.3 in phase 0)
 - [ ] Optional: import reference data from hive-crm

@@ -22,7 +22,23 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 
 ## Commands
 
-To be filled in during phase 0 (set-up, tests, static analysis, formatting).
+| What | Command |
+|---|---|
+| Set up (install, `.env`, key, migrate) | `composer setup` |
+| Everything CI runs | `composer ci` |
+| Code style | `composer lint` (check) · `composer lint:fix` |
+| Static analysis, Larastan level max | `composer analyse` |
+| Tests, all suites | `composer test` · `vendor/bin/pest --testsuite=Unit\|Feature\|Arch` |
+| One test file | `vendor/bin/pest tests/Feature/Settings/SettingsTest.php` |
+| Mutation testing on the Kernel | `composer test:mutate` (needs `pcov` or Xdebug; not part of CI) |
+| Create the owner | `php artisan owner:create you@example.test` |
+| Run a scheduled job now | `php artisan scheduling:run scheduling.prune-runs` |
+| Serve locally | `php artisan serve` (then `/admin`) |
+| Docker development environment | `docker compose up -d`, then the commands above through `docker compose exec app …` |
+
+Tests run on PostgreSQL: `phpunit.xml` points at `fast_backoffice_test` on `127.0.0.1` with user and password `fast` (CI overrides these with its service container; `docker/pgsql/create-test-database.sql` creates it in Docker). The Docker images run PHP 8.4; `composer.lock` is resolved for PHP 8.3 so it installs on both.
+
+Where things go: `app/Kernel` (money, VAT, numbering, dates, `Reference`), `app/Modules/{Module}` (see design.md §4.3), `app/Support` (shared infrastructure: the module provider base class, `Shape` for typed reads from arrays), `app/Providers/Filament/AdminPanelProvider.php` (the panel; modules contribute through plugins tagged by their providers). A new module: folder under `app/Modules`, provider extending `App\Support\ModuleServiceProvider`, entry in `config/modules.php` and in `bootstrap/providers.php` in layer order; `tests/Arch` checks all of it.
 
 ## Reference: hive-crm
 

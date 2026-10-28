@@ -1,6 +1,6 @@
 # fast-backoffice — Design
 
-> Status: design. No application code yet. Progress lives in [roadmap.md](roadmap.md).
+> Status: in development. Progress lives in [roadmap.md](roadmap.md).
 
 ## 1. What it is
 
@@ -39,18 +39,18 @@ Each one exists because hive-crm broke it somewhere.
 
 | Concern | Choice |
 |---|---|
-| Runtime | PHP 8.4 or newer (Pest 5 requires 8.4) |
+| Runtime | PHP 8.3 or newer; the Docker images and CI run 8.4 |
 | Framework | Laravel 13 |
 | Admin UI | Filament 5, on Livewire 4 |
 | Database | PostgreSQL 18, in tests too |
 | Cache and queues | Redis, with Horizon for workers |
-| Tests | Pest 5: Unit, Feature and Arch suites |
+| Tests | Pest 4: Unit, Feature and Arch suites (Pest 5 needs PHP 8.4 everywhere, including the development machine; it is a phase 8 item) |
 | Static analysis | Larastan 3 at level max |
 | Code style | Laravel Pint |
 | PDF | Decided in phase 3: dompdf (as in hive-crm) or an HTML-to-PDF service for better typography |
 | Hosting | Docker (app, worker, scheduler, PostgreSQL, Redis) behind Caddy, as in hive-crm |
 
-These are the current stable majors (October 2026); phase 0 pins exact versions in `composer.lock`.
+These are the current stable majors (October 2026); `composer.lock` pins exact versions, resolved for PHP 8.3 (`config.platform.php`) so the same lock installs on 8.3 and 8.4.
 
 ## 4. Modules
 
@@ -61,7 +61,7 @@ These are the current stable majors (October 2026); phase 0 pins exact versions 
 3  Managed assets   Websites · Domains · Repositories
 2  Billing core     Catalog · Cash · Invoicing · Quotes
 1  Parties          Contacts
-0  Platform         Kernel (code only) · Files · Settings · Scheduling
+0  Platform         Kernel (code only) · Files · Audit · Settings · Scheduling
 ```
 
 A module may depend on modules in lower layers, and on modules listed before it in its own layer. Never upward, never in a cycle. When a lower module needs something from a higher one — a contact's page listing that contact's websites, the cash-flow outlook including domain renewals — the higher module **contributes** it (§4.4).
@@ -73,6 +73,8 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 **Kernel** (layer 0, code only). `Money`, quantities and VAT rates as integers; the VAT engine (line nets, per-rate summary, totals); gapless numbering sequences (§5.2); date helpers (no-overflow months, anchor days).
 
 **Files** (0). Stored files on S3-compatible storage, attached to any record by an opaque owner reference; generated PDFs and XML with checksums.
+
+**Audit** (0). The audit trail: who did what to which record, written by use cases inside their transaction (`RecordAuditEntry`), read on a screen. Issuing, sending and voiding fiscal documents and every settings change go through it. A module rather than part of the Kernel because it has a table; in layer 0 before Settings because Settings writes to it.
 
 **Settings** (0). The owner's fiscal identity (the *cedente*), invoice defaults (payment terms, legal wording, stamp-duty and INPS options), numbering series and opening numbers, and the non-secret SdI channel settings.
 
@@ -114,10 +116,12 @@ app/Modules/{Module}/
     Contracts/                   extension points this module consumes              │
     Filament/Components/         UI pieces other modules may embed                  ┘
     Models/                      Eloquent models
-    Filament/                    resources, pages, widgets
+    Filament/                    resources, pages, widgets, and the module's panel plugin
     Integrations/                adapters to external systems (PEC, SES, Cal.com)
+    Jobs/                        recurring jobs (Scheduling's `ScheduledJob` contract)
+    Console/                     artisan commands
     Database/                    migrations, factories, seeders
-    {Module}ServiceProvider.php
+    {Module}ServiceProvider.php  migrations, bindings, the panel plugin and job tags
 ```
 
 Architecture tests enforce:
@@ -126,7 +130,11 @@ Architecture tests enforce:
 - dependencies follow the layers of §4.1;
 - `Kernel` depends on no module;
 - events carry no models; DTOs are final and readonly;
-- no `env()` outside `config/`, no `dd()`/`dump()`, no `translatedFormat()` (it reads PHP date tokens, not ISO ones).
+- no `env()` outside `config/`, no `dd()`/`dump()`, no `translatedFormat()` (it reads PHP date tokens, not ISO ones);
+- no Carbon month arithmetic outside the Kernel (`Months`, `Recurrence`), so a date never overflows or drifts;
+- every module is listed in `config/modules.php` with its layer, and its provider registered in layer order.
+
+The layer table lives in `config/modules.php`; `tests/Arch` reads it. A module's provider extends `App\Support\ModuleServiceProvider`: it loads the module's migrations and tags its Filament plugin, which the panel provider collects.
 
 ### 4.4 Composition across modules
 
@@ -209,7 +217,7 @@ Architecture tests enforce:
 
 - Docker images for the app, the queue worker (Horizon) and the scheduler; PostgreSQL; Redis; Caddy for TLS.
 - Secrets — PEC password, SES keys, app key — live only in the server's environment, never in the database or the repository.
-- One owner account with two-factor authentication. Issuing, sending and voiding fiscal documents are recorded in an audit trail.
+- One owner account, created with `php artisan owner:create` (no default user, no seeded password), with mandatory two-factor authentication (TOTP, with recovery codes; secrets stored encrypted). Issuing, sending and voiding fiscal documents are recorded in the audit trail (the Audit module).
 - Nightly backups of the database and files to S3-compatible storage, with a restore drill in the runbook. Legal archiving of invoices is separate — see [sdi.md §8](sdi.md#8-archiving-conservazione).
 - Production-safety tests (no default credentials, gated operations dashboards, no dev-only packages at runtime), ported from hive-crm.
 
