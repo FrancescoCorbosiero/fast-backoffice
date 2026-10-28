@@ -1,0 +1,76 @@
+# Roadmap
+
+The build follows the module layers ([design.md §4.1](design.md#41-layers)): each phase only needs the ones before it. A phase is done when every box is ticked, CI is green and the app is deployable. Sessions tick boxes as they finish them.
+
+To continue in a new Claude Code session on this repository: *"Continue the roadmap: work on the first phase that isn't done."* `CLAUDE.md` points the session at everything else.
+
+After phase 3 the app can already issue invoices (sent manually through the Agenzia's portal). Phase 5 automates sending and receiving.
+
+## Phase 0 — Foundation
+
+- [ ] Laravel 13 application with a Filament 5 panel; Docker development environment with PostgreSQL 18 and Redis
+- [ ] CI: Pint, Larastan (max), Pest (Unit, Feature, Arch) on PostgreSQL
+- [ ] Module skeleton and the architecture tests for the rules in design.md §4.3
+- [ ] Kernel: `Money`, the VAT engine (port hive-crm's `LineItemsTest`), numbering sequences (gapless, opening number), date helpers (no-overflow months, anchor days)
+- [ ] Single-owner login with two-factor authentication; audit trail
+- [ ] Files (S3-compatible disk)
+- [ ] Settings: business profile, invoice defaults, numbering series
+- [ ] Scheduling: jobs defined in code, overrides and run history in the database, a screen to see and run them
+- [ ] `CLAUDE.md` commands section filled in
+
+## Phase 1 — Contacts
+
+- [ ] Contacts with roles; fiscal identity validation (Partita IVA, codice fiscale, foreign VAT numbers); SdI addressing; email consent and suppression
+- [ ] `ContactPicker` component; contact page with the `ContactPanel` extension point
+- [ ] Merging duplicates (`ContactsMerged` event)
+
+## Phase 2 — Cash
+
+- [ ] Accounts, movements, categories
+- [ ] Ledger, monthly series, year-to-date and category analytics as queries, with query-budget tests
+- [ ] Recurring expenses with "log occurrence"
+- [ ] `CashFlowSchedule` extension point and the projection screen
+
+## Phase 3 — Invoicing core (manual sending)
+
+- [ ] Catalog
+- [ ] Drafts; issue (number, snapshots, frozen totals); credit notes; payment requests
+- [ ] Payments through Cash (`RecordPayment`, `RemovePayment`), payment state, overdue
+- [ ] FatturaPA XML builder validated against the official XSD; export for manual upload; "mark as sent manually"
+- [ ] Courtesy PDF (choose the renderer)
+- [ ] Stamp duty, flat-rate regime and INPS contribution, driven by settings
+- [ ] Recurring invoices (anchor day; drafts, or issue automatically when opted in)
+- [ ] Import FatturaPA files: supplier invoices, and the owner's invoices issued elsewhere this year
+- [ ] Contributions: receivables and recurring invoices to the cash-flow projection; invoices to the contact page
+
+## Phase 4 — Quotes
+
+- [ ] Quotes with their own numbering, validity, statuses and PDF
+- [ ] Accepting a quote creates an invoice draft or a payment request, through Invoicing
+
+## Phase 5 — SdI over PEC
+
+- [ ] Outbox: sending by PEC, file-name sequence, kill switch, 12-day countdown
+- [ ] Inbox: IMAP polling, PEC envelope parsing, RC / NS / MC handling, rejections with the 5-day resend
+- [ ] Supplier invoices from SdI, including signed `.p7m` files, linked to suppliers
+- [ ] Integration tests against a local SMTP and IMAP server
+- [ ] Every **verify** item in sdi.md checked
+- [ ] First-send checklist (sdi.md §9) done with the owner
+
+## Phase 6 — Managed assets
+
+- [ ] Websites: subscriptions through recurring invoices, hosting renewals, concurrent uptime checks
+- [ ] Domains: renewals and idempotent "log renewal"; Repositories
+- [ ] Contributions to the cash-flow projection and the contact page
+
+## Phase 7 — Growth
+
+- [ ] Leads, with `ConvertLead` (contact, quote and website in one transaction)
+- [ ] Calendar: Cal.com webhooks and periodic sync
+- [ ] Mail campaigns: SES, rate limiting, retries, SNS deduplication, bounce policy, RFC 8058 unsubscribe
+
+## Phase 8 — Production
+
+- [ ] Production Docker images, Caddy, backups with a restore drill, deploy runbook
+- [ ] Production-safety tests
+- [ ] Optional: import reference data from hive-crm
