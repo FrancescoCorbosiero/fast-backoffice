@@ -18,6 +18,7 @@ return [
     'layers' => [
         0 => ['Files', 'Audit', 'Settings', 'Scheduling'],
         1 => ['Contacts'],
+        2 => ['Cash'],
     ],
 
     /*

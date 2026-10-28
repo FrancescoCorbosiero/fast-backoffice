@@ -84,7 +84,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Catalog** (2). Sellable services with default price, VAT treatment (rate or natura) and cadence. A template source only: lines are copied into documents, so the catalog never changes an issued document.
 
-**Cash** (2). Accounts (bank, card, cash, PayPal…), movements in and out, categories, recurring expenses, analytics, and the cash-flow projection (consumer of the `CashFlowSchedule` extension point). Later: bank-statement import and reconciliation.
+**Cash** (2). Accounts (bank, card, cash, PayPal…), movements in and out, categories, recurring expenses, analytics, and the cash-flow projection (consumer of the `CashFlowSchedule` extension point). `RecordMovement` is the one way money moves; an allocated movement is changed or removed only by the module that allocated it, which proves it by passing the allocation. A movement flagged as not taxable (a transfer, the owner's own money) counts in balances but not in the analytics. `AllocationPresenter` lets allocating modules label and link their documents on the Cash screens. Later: bank-statement import and reconciliation.
 
 **Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI; FatturaPA XML; the SdI channel over PEC; courtesy PDFs; stamp duty; payments.
 
@@ -119,6 +119,8 @@ app/Modules/{Module}/
     Filament/                    resources, pages, widgets, and the module's panel plugin
     Integrations/                adapters to external systems (PEC, SES, Cal.com)
     Jobs/                        recurring jobs (Scheduling's `ScheduledJob` contract)
+    Contributions/               implementations of lower modules' extension points
+    Listeners/                   listeners for lower modules' events
     Console/                     artisan commands
     Database/                    migrations, factories, seeders
     {Module}ServiceProvider.php  migrations, bindings, the panel plugin and job tags

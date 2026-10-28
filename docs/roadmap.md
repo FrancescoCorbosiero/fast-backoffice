@@ -30,10 +30,12 @@ Notes: the fiscal identifier validators live in the Kernel (`App\Kernel\Fiscal`)
 
 ## Phase 2 — Cash
 
-- [ ] Accounts, movements, categories
-- [ ] Ledger, monthly series, year-to-date and category analytics as queries, with query-budget tests
-- [ ] Recurring expenses with "log occurrence"
-- [ ] `CashFlowSchedule` extension point and the projection screen
+- [x] Accounts, movements, categories
+- [x] Ledger, monthly series, year-to-date and category analytics as queries, with query-budget tests
+- [x] Recurring expenses with "log occurrence"
+- [x] `CashFlowSchedule` extension point and the projection screen
+
+Notes: the dashboard carries the year-to-date figures, the 12-month chart and the category breakdowns; the statement page shows one account's month with running balances. Cash contributes a "Movimenti di cassa" section to the contact page. Categories are reference data seeded idempotently by `db:seed`.
 
 ## Phase 3 — Invoicing core (manual sending)
 
