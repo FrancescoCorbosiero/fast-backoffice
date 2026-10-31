@@ -60,12 +60,14 @@ Notes: a quote is numbered when written (`PRV n/year`, non-fiscal). "Expired" is
 
 ## Phase 5 — SdI over PEC
 
-- [ ] Outbox: sending by PEC, file-name sequence, kill switch, 12-day countdown
-- [ ] Inbox: IMAP polling, PEC envelope parsing, RC / NS / MC handling, rejections with the 5-day resend
-- [ ] Supplier invoices from SdI, including signed `.p7m` files, linked to suppliers
-- [ ] Integration tests against a local SMTP and IMAP server
-- [ ] Every **verify** item in sdi.md checked
+- [x] Outbox: sending by PEC, file-name sequence, kill switch, 12-day countdown
+- [x] Inbox: IMAP polling, PEC envelope parsing, RC / NS / MC handling, rejections with the 5-day resend
+- [x] Supplier invoices from SdI, including signed `.p7m` files, linked to suppliers
+- [x] Integration tests against a local SMTP and IMAP server
+- [ ] Every **verify** item in sdi.md checked — needs the owner or the accountant; see the list below
 - [ ] First-send checklist (sdi.md §9) done with the owner
+
+Notes: the mailbox is behind `PecMailbox` (Invoicing › Integrations › Pec); the real adapter is Symfony Mailer over SMTP plus `webklex/php-imap` (pure PHP, no `ext-imap`), tests use an in-memory fake. Hosts and credentials come from `PEC_*` env vars (`config/pec.php`); the addresses and the two switches are settings (Impostazioni › SdI e PEC). The address SdI answers from is saved automatically from the first notification. Every PEC message is stored raw and recorded once (Sistema › Casella PEC); what the app can't handle is flagged for review and counted on the dashboard. The GreenMail round trip (`PecMailboxIntegrationTest`) runs in CI through a service container and is skipped where no server is reachable (`PEC_TEST_HOST`); it could not be run in the environment this phase was built in. Still to **verify** with real traffic or the accountant: the notification file-name pattern and `daticert.xml` fields (`SdiFileNames`, `PecEnvelopeParser`), the SdI reply address, the stamp-duty natura mapping, the INPS block, the legal wording, consumers and businesses abroad without a VAT number. Telling the customer about a not-delivered invoice is a dashboard item for now (the MC fires `InvoiceNotDelivered`); the email goes with phase 7's campaigns.
 
 ## Phase 6 — Managed assets
 

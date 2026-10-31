@@ -7,6 +7,7 @@ namespace App\Modules\Settings\Filament;
 use App\Modules\Settings\Filament\Pages\BusinessProfilePage;
 use App\Modules\Settings\Filament\Pages\InvoiceDefaultsPage;
 use App\Modules\Settings\Filament\Pages\NumberingSeriesPage;
+use App\Modules\Settings\Filament\Pages\SdiSettingsPage;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 
@@ -23,6 +24,7 @@ class SettingsPlugin implements Plugin
             BusinessProfilePage::class,
             InvoiceDefaultsPage::class,
             NumberingSeriesPage::class,
+            SdiSettingsPage::class,
         ]);
     }
 

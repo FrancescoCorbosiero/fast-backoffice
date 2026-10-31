@@ -6,6 +6,7 @@ namespace App\Modules\Invoicing\Filament;
 
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\PaymentRequestResource;
+use App\Modules\Invoicing\Filament\Resources\PecMessages\PecMessageResource;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\RecurringInvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\SupplierInvoiceResource;
 use App\Modules\Invoicing\Filament\Widgets\InvoicingOverviewWidget;
@@ -27,6 +28,7 @@ class InvoicingPlugin implements Plugin
                 PaymentRequestResource::class,
                 RecurringInvoiceResource::class,
                 SupplierInvoiceResource::class,
+                PecMessageResource::class,
             ])
             ->widgets([InvoicingOverviewWidget::class]);
     }

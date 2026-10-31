@@ -94,7 +94,8 @@ class InvoiceResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return $record instanceof Invoice && ! $record->status->isIssued();
+        // A rejected invoice counts as never issued (sdi.md §6): it is corrected and reissued.
+        return $record instanceof Invoice && (! $record->status->isIssued() || $record->status === InvoiceStatus::Rejected);
     }
 
     public static function canDelete(Model $record): bool

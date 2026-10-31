@@ -87,3 +87,15 @@ Keeping the XML in the app, or in backups, is not legal archiving. The owner joi
 - **Parsers**: fixtures of real, anonymised PEC envelopes, SdI notifications (RC, NS, MC) and signed supplier invoices.
 - **Integration**: send and receive against a local SMTP and IMAP server in CI (e.g. GreenMail), so the whole loop runs without touching SdI.
 - No simulation of SdI's behaviour beyond recorded fixtures.
+
+## 11. Where it lives (phase 5)
+
+| Concern | Code |
+|---|---|
+| Mailbox contract, SMTP/IMAP adapter, envelope parser | `app/Modules/Invoicing/Integrations/Pec/` (`PecMailbox`, `SmtpImapPecMailbox`, `PecEnvelopeParser`, `SdiNotificationReader`, `SdiFileNames`) |
+| Signed supplier files | `Integrations/FatturaPa/SignedFile` |
+| Outbox | `Actions/SendToSdi`, `Jobs/SendIssuedInvoices` (`invoicing.sdi-send`), table `sdi_transmissions` |
+| Inbox | `Jobs/ReadPecInbox` (`invoicing.pec-inbox`), `Actions/ProcessPecMessage`, `Actions/RecordSdiNotification`, table `pec_messages`, screen Sistema › Casella PEC |
+| Rejections | `Actions/UpdateDraft` (accepts rejected), `IssueInvoice::reissue`, `Actions/VoidInvoice` |
+| Settings and secrets | Impostazioni › SdI e PEC (`SdiSettings`), `config/pec.php` (`PEC_*` env vars) |
+| Tests | `tests/Unit/Invoicing/SdiFilesTest.php`, `tests/Feature/Invoicing/{SdiOutboxTest,PecInboxTest,SdiPagesTest,PecMailboxIntegrationTest}.php`, fixtures in `tests/Support/PecFixtures.php` and `tests/Fixtures/sdi/` |

@@ -19,6 +19,7 @@ final readonly class InvoiceData
 {
     /**
      * @param  list<LineInput>  $lines
+     * @param  list<array{code: string, description: string, hint: ?string}>  $sdiErrors
      */
     public function __construct(
         public int $id,
@@ -49,7 +50,31 @@ final readonly class InvoiceData
         public ?int $pdfFileId,
         public ?CarbonImmutable $sentAt,
         public ?SendChannel $sentChannel,
+        public ?string $sdiIdentifier = null,
+        public ?CarbonImmutable $sdiOutcomeAt = null,
+        public array $sdiErrors = [],
+        public ?CarbonImmutable $rejectedAt = null,
     ) {}
+
+    /**
+     * Last day to resend a rejected invoice with the same number and date
+     * (sdi.md §6): five days from the rejection.
+     */
+    public function resendDeadline(): ?CarbonImmutable
+    {
+        if ($this->status !== InvoiceStatus::Rejected || $this->rejectedAt === null) {
+            return null;
+        }
+
+        return $this->rejectedAt->startOfDay()->addDays(5);
+    }
+
+    public function canBeResent(CarbonImmutable $today): bool
+    {
+        $deadline = $this->resendDeadline();
+
+        return $deadline !== null && ! $today->startOfDay()->greaterThan($deadline);
+    }
 
     public function reference(): Reference
     {

@@ -52,6 +52,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?CarbonImmutable $sent_at
  * @property ?SendChannel $sent_channel
  * @property ?CarbonImmutable $voided_at
+ * @property ?string $sdi_identifier
+ * @property ?CarbonImmutable $sdi_outcome_at
+ * @property ?array<array-key, mixed> $sdi_errors
+ * @property ?CarbonImmutable $rejected_at
  */
 class Invoice extends Model
 {
@@ -91,6 +95,10 @@ class Invoice extends Model
             'sent_at' => 'immutable_datetime',
             'sent_channel' => SendChannel::class,
             'voided_at' => 'immutable_datetime',
+            'sdi_identifier' => 'string',
+            'sdi_outcome_at' => 'immutable_datetime',
+            'sdi_errors' => 'array',
+            'rejected_at' => 'immutable_datetime',
         ];
     }
 
@@ -165,6 +173,30 @@ class Invoice extends Model
             pdfFileId: $this->pdf_file_id,
             sentAt: $this->sent_at,
             sentChannel: $this->sent_channel,
+            sdiIdentifier: $this->sdi_identifier,
+            sdiOutcomeAt: $this->sdi_outcome_at,
+            sdiErrors: self::errorsFromJson($this->sdi_errors ?? []),
+            rejectedAt: $this->rejected_at,
         );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $json
+     * @return list<array{code: string, description: string, hint: ?string}>
+     */
+    public static function errorsFromJson(array $json): array
+    {
+        $errors = [];
+        foreach ($json as $error) {
+            if (! is_array($error)) {
+                continue;
+            }
+            $code = $error['code'] ?? '';
+            $description = $error['description'] ?? '';
+            $hint = $error['hint'] ?? null;
+            $errors[] = ['code' => is_scalar($code) ? (string) $code : '', 'description' => is_scalar($description) ? (string) $description : '', 'hint' => is_string($hint) && $hint !== '' ? $hint : null];
+        }
+
+        return $errors;
     }
 }

@@ -53,8 +53,15 @@ final readonly class ImportFatturaPa
         private Dispatcher $events,
     ) {}
 
-    public function import(string $fileName, string $xml): ImportResult
+    public function import(string $fileName, string $xml, ?string $sdiId = null): ImportResult
     {
+        if ($sdiId !== null) {
+            $known = SupplierInvoice::query()->where('sdi_id', $sdiId)->first();
+            if ($known !== null) {
+                return ImportResult::skipped($fileName, 'inbound', $known->toData()->reference(), 'già ricevuta da SdI');
+            }
+        }
+
         try {
             $parsed = $this->reader->read($xml);
         } catch (InvalidArgumentException $exception) {
@@ -77,7 +84,7 @@ final readonly class ImportFatturaPa
             }
 
             if ($isOwner($parsed->customer)) {
-                return $this->importInbound($fileName, $xml, $parsed);
+                return $this->importInbound($fileName, $xml, $parsed, $sdiId);
             }
         } catch (Throwable $exception) {
             report($exception);
@@ -88,7 +95,7 @@ final readonly class ImportFatturaPa
         return ImportResult::failed($fileName, 'Nessuna delle due parti è il profilo aziendale (partita IVA '.($ownerVat ?? '—').').');
     }
 
-    private function importInbound(string $fileName, string $xml, FatturaPaFile $parsed): ImportResult
+    private function importInbound(string $fileName, string $xml, FatturaPaFile $parsed, ?string $sdiId): ImportResult
     {
         $seller = $parsed->seller;
         $totals = $parsed->totals;
@@ -101,7 +108,7 @@ final readonly class ImportFatturaPa
             return ImportResult::skipped($fileName, 'inbound', $existing->toData()->reference(), 'già importata');
         }
 
-        return $this->db->transaction(function () use ($fileName, $xml, $parsed, $seller, $totals, $date, $number, $fingerprint): ImportResult {
+        return $this->db->transaction(function () use ($fileName, $xml, $parsed, $seller, $totals, $date, $number, $fingerprint, $sdiId): ImportResult {
             $supplier = $this->findOrCreateContact($seller, ContactRole::Supplier);
 
             $supplierInvoice = SupplierInvoice::query()->create([
@@ -117,6 +124,7 @@ final readonly class ImportFatturaPa
                 'totals' => $totals->toArray(),
                 'total_cents' => $totals->total->cents,
                 'file_name' => $fileName,
+                'sdi_id' => $sdiId,
                 'received_at' => Date::now(),
             ]);
 

@@ -12,15 +12,21 @@ use App\Modules\Invoicing\Actions\IssueInvoice;
 use App\Modules\Invoicing\Actions\MarkSentManually;
 use App\Modules\Invoicing\Actions\RecordPayment;
 use App\Modules\Invoicing\Actions\RemovePayment;
+use App\Modules\Invoicing\Actions\SendToSdi;
+use App\Modules\Invoicing\Actions\VoidInvoice;
 use App\Modules\Invoicing\Data\DocumentTotals;
+use App\Modules\Invoicing\Data\InvoiceData;
 use App\Modules\Invoicing\Data\PaymentData;
 use App\Modules\Invoicing\Data\PaymentInput;
 use App\Modules\Invoicing\DocumentContext;
 use App\Modules\Invoicing\Enums\DocumentType;
+use App\Modules\Invoicing\Enums\InvoiceStatus;
 use App\Modules\Invoicing\Filament\Components\DocumentInfolist;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Models\Invoice;
 use App\Modules\Invoicing\Queries\InvoicePayments;
+use App\Modules\Invoicing\Queries\SdiTransmissions;
+use App\Modules\Settings\Queries\GetSdiSettings;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -71,6 +77,13 @@ class ViewInvoice extends ViewRecord
             $header[] = TextEntry::make('h_payment')->label('Incasso')->state($state->label().' · residuo '.$data->outstanding()->format())->badge()->color($state->color());
         }
 
+        if ($invoice->status === InvoiceStatus::Rejected) {
+            $deadline = $data->resendDeadline();
+            $header[] = TextEntry::make('h_resend')->label('Scartata da SdI')
+                ->state($data->canBeResent($today) ? 'correggi e riemetti entro il '.($deadline?->isoFormat('D MMM YYYY') ?? '—') : 'finestra di reinvio chiusa: annulla ed emetti una nuova fattura')
+                ->color('danger');
+        }
+
         if (($days = $data->daysLeftToSend($today)) !== null) {
             $header[] = TextEntry::make('h_deadline')->label('Da inviare a SdI')->state($days < 0 ? 'in ritardo di '.abs($days).' giorni' : "entro {$days} giorni")->color($days < 3 ? 'danger' : 'warning');
         }
@@ -96,6 +109,10 @@ class ViewInvoice extends ViewRecord
             $components[] = $this->paymentsSection();
         }
 
+        if ($invoice->status->isIssued()) {
+            $components[] = $this->sdiSection($data, $today);
+        }
+
         if ($invoice->notes !== null) {
             $components[] = Section::make('Note')->components([TextEntry::make('h_notes')->label('')->state($invoice->notes)]);
         }
@@ -106,7 +123,49 @@ class ViewInvoice extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make()->visible(fn (): bool => ! $this->invoice()->status->isIssued()),
+            EditAction::make()->visible(fn (): bool => ! $this->invoice()->status->isIssued() || $this->invoice()->status === InvoiceStatus::Rejected),
+            Action::make('sendSdi')
+                ->label('Invia a SdI')
+                ->icon(Heroicon::OutlinedPaperAirplane)
+                ->color('primary')
+                ->visible(fn (): bool => $this->invoice()->status->canBeSent() && app(SendToSdi::class)->isAvailable())
+                ->requiresConfirmation()
+                ->modalDescription(fn (): string => 'Il file '.($this->invoice()->sdi_file_name ?? '').' parte via PEC verso '.app(GetSdiSettings::class)->get()->sdiAddress.'. L\'esito arriva dalla casella PEC.')
+                ->action(function (): void {
+                    $this->run(function (): string {
+                        $sent = app(SendToSdi::class)->send($this->invoice()->id);
+
+                        return $sent->title().' inviata a SdI';
+                    });
+                }),
+            Action::make('reissue')
+                ->label('Riemetti corretta')
+                ->icon(Heroicon::OutlinedArrowPath)
+                ->color('warning')
+                ->visible(fn (): bool => $this->invoice()->toData()->canBeResent(CarbonImmutable::today()))
+                ->requiresConfirmation()
+                ->modalDescription('La fattura viene ricostruita dalle righe con lo stesso numero e la stessa data, pronta per un nuovo invio (sdi.md §6).')
+                ->action(function (): void {
+                    $this->run(function (): string {
+                        $issued = app(IssueInvoice::class)->reissue($this->invoice()->id);
+
+                        return $issued->title().' riemessa ('.$issued->sdiFileName.')';
+                    });
+                }),
+            Action::make('void')
+                ->label('Annulla')
+                ->icon(Heroicon::OutlinedNoSymbol)
+                ->color('danger')
+                ->visible(fn (): bool => $this->invoice()->status === InvoiceStatus::Rejected)
+                ->requiresConfirmation()
+                ->modalDescription('La fattura scartata viene annullata: il numero resta usato e ne emetti una nuova.')
+                ->action(function (): void {
+                    $this->run(function (): string {
+                        app(VoidInvoice::class)->void($this->invoice()->id);
+
+                        return 'Fattura annullata';
+                    });
+                }),
             Action::make('issue')
                 ->label('Emetti')
                 ->icon(Heroicon::OutlinedCheckBadge)
@@ -182,6 +241,31 @@ class ViewInvoice extends ViewRecord
                     $this->redirect(InvoiceResource::getUrl('edit', ['record' => $note->id]));
                 }),
         ];
+    }
+
+    private function sdiSection(InvoiceData $data, CarbonImmutable $today): Section
+    {
+        $entries = [];
+        if ($data->sentAt !== null) {
+            $entries[] = TextEntry::make('s_sent')->label('Inviata')->state($data->sentAt->isoFormat('D MMM YYYY HH:mm').' via '.($data->sentChannel?->label() ?? '—'));
+        }
+        if ($data->sdiIdentifier !== null) {
+            $entries[] = TextEntry::make('s_id')->label('Identificativo SdI')->state($data->sdiIdentifier);
+        }
+        if ($data->sdiOutcomeAt !== null) {
+            $entries[] = TextEntry::make('s_outcome')->label('Esito SdI')->state($data->status->label().' · '.$data->sdiOutcomeAt->isoFormat('D MMM YYYY HH:mm'));
+        }
+        foreach (app(SdiTransmissions::class)->forInvoice($data->id) as $transmission) {
+            $entries[] = TextEntry::make('s_t'.$transmission->id)->label('PEC '.$transmission->fileName)->state($transmission->transportStatus().' → '.$transmission->sentTo.($transmission->outcome !== null ? ' · esito '.$transmission->outcome : ''));
+        }
+        foreach ($data->sdiErrors as $index => $error) {
+            $entries[] = TextEntry::make('s_e'.$index)->label('Errore '.$error['code'])->state($error['description'].($error['hint'] !== null ? ' — '.$error['hint'] : ''))->color('danger')->columnSpanFull();
+        }
+        if ($entries === []) {
+            $entries[] = TextEntry::make('s_none')->label('')->state($data->daysLeftToSend($today) !== null ? 'Non ancora inviata a SdI.' : '—');
+        }
+
+        return Section::make('Sistema di Interscambio')->compact()->columns(2)->components($entries);
     }
 
     private function paymentsSection(): Section

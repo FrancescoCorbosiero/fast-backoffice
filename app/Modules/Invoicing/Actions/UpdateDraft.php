@@ -7,6 +7,7 @@ namespace App\Modules\Invoicing\Actions;
 use App\Modules\Invoicing\Data\DraftInput;
 use App\Modules\Invoicing\Data\InvoiceData;
 use App\Modules\Invoicing\DocumentContext;
+use App\Modules\Invoicing\Enums\InvoiceStatus;
 use App\Modules\Invoicing\Models\Invoice;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +31,8 @@ final readonly class UpdateDraft
         return $this->db->transaction(function () use ($invoiceId, $input, $customer): InvoiceData {
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoiceId);
 
-            if ($invoice->status->isIssued()) {
+            // A rejected invoice counts as never issued (sdi.md §6): it is corrected and reissued.
+            if ($invoice->status->isIssued() && $invoice->status !== InvoiceStatus::Rejected) {
                 throw new LogicException("Invoice {$invoiceId} is issued: an issued document never changes.");
             }
 

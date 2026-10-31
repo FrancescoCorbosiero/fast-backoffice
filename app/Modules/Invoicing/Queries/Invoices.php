@@ -43,6 +43,14 @@ final readonly class Invoices
     }
 
     /**
+     * @return list<InvoiceData> oldest first
+     */
+    public function withStatus(InvoiceStatus $status): array
+    {
+        return $this->map(Invoice::query()->where('status', $status->value)->orderBy('issued_on')->orderBy('id')->get()->all());
+    }
+
+    /**
      * What clients still owe on issued invoices, by due date.
      *
      * @return list<InvoiceData>

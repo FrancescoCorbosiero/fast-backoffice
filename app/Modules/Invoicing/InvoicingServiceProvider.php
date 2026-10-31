@@ -14,7 +14,11 @@ use App\Modules\Invoicing\Contributions\InvoicesContactPanel;
 use App\Modules\Invoicing\Contributions\ReceivablesSchedule;
 use App\Modules\Invoicing\Contributions\RecurringInvoicesSchedule;
 use App\Modules\Invoicing\Filament\InvoicingPlugin;
+use App\Modules\Invoicing\Integrations\Pec\PecMailbox;
+use App\Modules\Invoicing\Integrations\Pec\SmtpImapPecMailbox;
 use App\Modules\Invoicing\Jobs\IssueDueRecurringInvoices;
+use App\Modules\Invoicing\Jobs\ReadPecInbox;
+use App\Modules\Invoicing\Jobs\SendIssuedInvoices;
 use App\Modules\Invoicing\Listeners\RepointMergedContact;
 use App\Modules\Scheduling\Contracts\ScheduledJob;
 use App\Support\ModuleServiceProvider;
@@ -39,7 +43,8 @@ class InvoicingServiceProvider extends ModuleServiceProvider
         $this->app->tag([ReceivablesSchedule::class, RecurringInvoicesSchedule::class], CashFlowSchedule::TAG);
         $this->app->tag([InvoiceAllocationPresenter::class], AllocationPresenter::TAG);
         $this->app->tag([InvoicesContactPanel::class], ContactPanel::TAG);
-        $this->app->tag([IssueDueRecurringInvoices::class], ScheduledJob::TAG);
+        $this->app->singleton(PecMailbox::class, SmtpImapPecMailbox::class);
+        $this->app->tag([IssueDueRecurringInvoices::class, SendIssuedInvoices::class, ReadPecInbox::class], ScheduledJob::TAG);
     }
 
     public function boot(): void
