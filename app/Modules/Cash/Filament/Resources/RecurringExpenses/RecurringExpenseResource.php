@@ -7,7 +7,7 @@ namespace App\Modules\Cash\Filament\Resources\RecurringExpenses;
 use App\Kernel\Dates\Frequency;
 use App\Modules\Cash\Actions\LogRecurringExpense;
 use App\Modules\Cash\Enums\Direction;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\Movements\MovementResource;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages\CreateRecurringExpense;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages\EditRecurringExpense;

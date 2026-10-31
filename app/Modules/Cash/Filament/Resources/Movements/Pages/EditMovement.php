@@ -7,7 +7,7 @@ namespace App\Modules\Cash\Filament\Resources\Movements\Pages;
 use App\Modules\Cash\Actions\DeleteMovement;
 use App\Modules\Cash\Actions\UpdateMovement;
 use App\Modules\Cash\Data\MovementInput;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\Movements\MovementResource;
 use App\Modules\Cash\Models\Movement;
 use Filament\Actions\Action;

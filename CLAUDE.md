@@ -35,6 +35,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | Run a scheduled job now | `php artisan scheduling:run scheduling.prune-runs` |
 | Regenerate the FatturaPA golden files | `UPDATE_FATTURAPA_GOLDEN=1 vendor/bin/pest tests/Feature/Invoicing/TotalsAndXmlTest.php` then review the diff |
 | Rebuild cached paid amounts | `php artisan invoicing:rebuild-paid` |
+| Check every monitored website now | `php artisan scheduling:run websites.uptime-check` |
 | Read the PEC mailbox now / send issued invoices now | `php artisan scheduling:run invoicing.pec-inbox` · `php artisan scheduling:run invoicing.sdi-send` |
 | PEC round-trip test against a local mail server | `PEC_TEST_HOST=127.0.0.1 vendor/bin/pest tests/Feature/Invoicing/PecMailboxIntegrationTest.php` (GreenMail on 3025/3143; CI does this) |
 | Serve locally | `php artisan serve` (then `/admin`) |

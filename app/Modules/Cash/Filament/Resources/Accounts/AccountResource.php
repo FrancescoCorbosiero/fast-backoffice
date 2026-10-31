@@ -6,7 +6,7 @@ namespace App\Modules\Cash\Filament\Resources\Accounts;
 
 use App\Kernel\Money\Money;
 use App\Modules\Cash\Enums\AccountType;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\ListAccounts;

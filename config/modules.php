@@ -19,6 +19,7 @@ return [
         0 => ['Files', 'Audit', 'Settings', 'Scheduling'],
         1 => ['Contacts'],
         2 => ['Catalog', 'Cash', 'Invoicing', 'Quotes'],
+        3 => ['Websites', 'Domains', 'Repositories'],
     ],
 
     /*

@@ -6,7 +6,7 @@ namespace App\Modules\Cash\Filament\Pages;
 
 use App\Modules\Cash\Data\ExpectedFlow;
 use App\Modules\Cash\Data\Projection;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Queries\CashFlowProjection;
 use BackedEnum;
 use Carbon\CarbonImmutable;

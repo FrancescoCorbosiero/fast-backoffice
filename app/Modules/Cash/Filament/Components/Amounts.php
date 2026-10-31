@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Cash\Filament;
+namespace App\Modules\Cash\Filament\Components;
 
 use App\Kernel\Money\Money;
 use Closure;

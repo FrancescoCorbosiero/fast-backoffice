@@ -71,9 +71,11 @@ Notes: the mailbox is behind `PecMailbox` (Invoicing › Integrations › Pec); 
 
 ## Phase 6 — Managed assets
 
-- [ ] Websites: subscriptions through recurring invoices, hosting renewals, concurrent uptime checks
-- [ ] Domains: renewals and idempotent "log renewal"; Repositories
-- [ ] Contributions to the cash-flow projection and the contact page
+- [x] Websites: subscriptions through recurring invoices, hosting renewals, concurrent uptime checks
+- [x] Domains: renewals and idempotent "log renewal"; Repositories
+- [x] Contributions to the cash-flow projection and the contact page
+
+Notes: layer 3 is `Websites`, `Domains`, `Repositories` (Domains and Repositories link to a website, so Websites comes first). Hosting renewals follow the Kernel's `Recurrence` anchored on the first renewal; domain renewals move the expiry by whole months (`Months::add`). Both "log renewal" actions allocate the movement to `hosting_renewal:{id}:{date}` / `domain_renewal:{id}:{date}`, so a period is paid once. Uptime: one `Http::pool` for every monitored site (`websites.uptime-check`, every 10 minutes), down after two failures in a row, `WebsiteDown` / `WebsiteRecovered` events for phase 7's notifications. A website's subscription goes through Invoicing's new public `CreateRecurringInvoice` / `DeactivateRecurringInvoice`. Cash opened `Queries\Categories`, `AllocatedMovements::matching` and `Filament\Components\Amounts` for the renewal forms.
 
 ## Phase 7 — Growth
 

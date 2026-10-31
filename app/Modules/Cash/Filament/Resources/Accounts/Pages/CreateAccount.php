@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Cash\Filament\Resources\Accounts\Pages;
 
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\Accounts\AccountResource;
 use Filament\Resources\Pages\CreateRecord;
 

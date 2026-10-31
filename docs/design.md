@@ -90,9 +90,9 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined; expired is derived from the validity date) and PDF. Their figures come from Invoicing's `DocumentFigures` and their PDF from its `RenderDocumentPdf`, so one engine and one layout serve every document. Accepting one creates an invoice draft or a payment request through Invoicing, in the same transaction.
 
-**Websites** (3). Sites run for clients: URL, owner, hosting renewals, subscription (billed by a recurring invoice created through Invoicing), uptime checks run concurrently.
+**Websites** (3). Sites run for clients: URL and indexed host, owner, status, hosting renewals on a step rule (`LogHostingRenewal`, idempotent per period), subscription (a recurring invoice created through Invoicing's `CreateRecurringInvoice`; the website keeps its id), uptime checks run concurrently in one HTTP pool (`websites.uptime-check`), down after two failures in a row.
 
-**Domains** (3). Registrations: registrar, expiry, auto-renew, renewal cost, link to a website. "Log renewal" records the cash movement and rolls the expiry forward, once per period.
+**Domains** (3). Registrations: registrar, expiry, auto-renew, renewal cost and cadence in months, link to a website. "Log renewal" (`LogDomainRenewal`) records the cash movement and rolls the expiry forward by whole months, once per period; "expired" is derived by comparing the expiry with today.
 
 **Repositories** (3). Code repositories linked to a website and a client.
 

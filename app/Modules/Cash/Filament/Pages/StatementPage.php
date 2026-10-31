@@ -6,7 +6,7 @@ namespace App\Modules\Cash\Filament\Pages;
 
 use App\Kernel\Dates\Months;
 use App\Modules\Cash\Data\LedgerLine;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Queries\Accounts;
 use App\Modules\Cash\Queries\Ledger;
 use BackedEnum;

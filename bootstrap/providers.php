@@ -18,6 +18,9 @@ return [
     App\Modules\Cash\CashServiceProvider::class,
     App\Modules\Invoicing\InvoicingServiceProvider::class,
     App\Modules\Quotes\QuotesServiceProvider::class,
+    App\Modules\Websites\WebsitesServiceProvider::class,
+    App\Modules\Domains\DomainsServiceProvider::class,
+    App\Modules\Repositories\RepositoriesServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\HorizonServiceProvider::class,
 ];

@@ -6,7 +6,7 @@ namespace App\Modules\Cash\Filament\Widgets;
 
 use App\Modules\Cash\Data\CategoryTotal;
 use App\Modules\Cash\Enums\Direction;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Queries\Analytics;
 use Carbon\CarbonImmutable;
 use Filament\Tables\Columns\TextColumn;

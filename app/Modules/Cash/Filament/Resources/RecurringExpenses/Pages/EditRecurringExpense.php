@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages;
 
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\RecurringExpenseResource;
 use Filament\Resources\Pages\EditRecord;
 

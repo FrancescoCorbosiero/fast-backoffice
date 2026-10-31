@@ -7,7 +7,7 @@ namespace App\Modules\Cash\Filament\Resources\Movements;
 use App\Kernel\Reference;
 use App\Modules\Cash\Enums\Direction;
 use App\Modules\Cash\Filament\Allocations;
-use App\Modules\Cash\Filament\Amounts;
+use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\CreateMovement;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\EditMovement;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\ListMovements;

@@ -38,6 +38,24 @@ final readonly class AllocatedMovements
             ->all());
     }
 
+    /**
+     * Every movement allocated to a type and key prefix, e.g. all the
+     * renewals of one domain ("domain_renewal", "7:"), oldest first.
+     *
+     * @return list<MovementData>
+     */
+    public function matching(string $type, string $keyPrefix): array
+    {
+        $prefix = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $type.':'.$keyPrefix);
+
+        return array_values(Movement::query()
+            ->where('allocation', 'like', $prefix.'%')
+            ->orderBy('occurred_on')->orderBy('id')
+            ->get()
+            ->map(fn (Movement $movement): MovementData => $movement->toData())
+            ->all());
+    }
+
     public function exists(Reference $allocation): bool
     {
         return Movement::query()->where('allocation', $allocation->toString())->exists();
