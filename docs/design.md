@@ -1,6 +1,6 @@
 # fast-backoffice — Design
 
-> Status: design. No application code yet. Progress lives in [roadmap.md](roadmap.md).
+> Status: in development. Progress lives in [roadmap.md](roadmap.md).
 
 ## 1. What it is
 
@@ -39,18 +39,18 @@ Each one exists because hive-crm broke it somewhere.
 
 | Concern | Choice |
 |---|---|
-| Runtime | PHP 8.4 or newer (Pest 5 requires 8.4) |
+| Runtime | PHP 8.3 or newer; the Docker images and CI run 8.4 |
 | Framework | Laravel 13 |
 | Admin UI | Filament 5, on Livewire 4 |
 | Database | PostgreSQL 18, in tests too |
 | Cache and queues | Redis, with Horizon for workers |
-| Tests | Pest 5: Unit, Feature and Arch suites |
+| Tests | Pest 4: Unit, Feature and Arch suites (Pest 5 needs PHP 8.4 everywhere, including the development machine; it is a phase 8 item) |
 | Static analysis | Larastan 3 at level max |
 | Code style | Laravel Pint |
-| PDF | Decided in phase 3: dompdf (as in hive-crm) or an HTML-to-PDF service for better typography |
+| PDF | dompdf through `barryvdh/laravel-dompdf` (decided in phase 3): no external service, DejaVu Sans for the euro sign |
 | Hosting | Docker (app, worker, scheduler, PostgreSQL, Redis) behind Caddy, as in hive-crm |
 
-These are the current stable majors (October 2026); phase 0 pins exact versions in `composer.lock`.
+These are the current stable majors (October 2026); `composer.lock` pins exact versions, resolved for PHP 8.3 (`config.platform.php`) so the same lock installs on 8.3 and 8.4.
 
 ## 4. Modules
 
@@ -61,7 +61,7 @@ These are the current stable majors (October 2026); phase 0 pins exact versions 
 3  Managed assets   Websites · Domains · Repositories
 2  Billing core     Catalog · Cash · Invoicing · Quotes
 1  Parties          Contacts
-0  Platform         Kernel (code only) · Files · Settings · Scheduling
+0  Platform         Kernel (code only) · Files · Audit · Settings · Scheduling
 ```
 
 A module may depend on modules in lower layers, and on modules listed before it in its own layer. Never upward, never in a cycle. When a lower module needs something from a higher one — a contact's page listing that contact's websites, the cash-flow outlook including domain renewals — the higher module **contributes** it (§4.4).
@@ -70,35 +70,37 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 ### 4.2 Catalogue
 
-**Kernel** (layer 0, code only). `Money`, quantities and VAT rates as integers; the VAT engine (line nets, per-rate summary, totals); gapless numbering sequences (§5.2); date helpers (no-overflow months, anchor days).
+**Kernel** (layer 0, code only). `Money`, quantities and VAT rates as integers; the VAT engine (line nets, per-rate summary, totals); gapless numbering sequences (§5.2); date helpers (no-overflow months, anchor days); fiscal identifiers (Partita IVA check digit, codice fiscale checksum, VAT number formats by country), used by Settings for the owner and by Contacts for everyone else; the opaque `Reference`.
 
 **Files** (0). Stored files on S3-compatible storage, attached to any record by an opaque owner reference; generated PDFs and XML with checksums.
+
+**Audit** (0). The audit trail: who did what to which record, written by use cases inside their transaction (`RecordAuditEntry`), read on a screen. Issuing, sending and voiding fiscal documents and every settings change go through it. A module rather than part of the Kernel because it has a table; in layer 0 before Settings because Settings writes to it.
 
 **Settings** (0). The owner's fiscal identity (the *cedente*), invoice defaults (payment terms, legal wording, stamp-duty and INPS options), numbering series and opening numbers, and the non-secret SdI channel settings.
 
 **Scheduling** (0). Recurring jobs are defined in code by each module; the database stores only overrides (enabled, schedule) and run history (start, end, real exit code, output). A screen lists them and can run one now.
 
-**Contacts** (1). People and companies; roles (client, supplier…); validated fiscal identity (Partita IVA check digit, codice fiscale checksum, foreign VAT numbers by country); SdI addressing (codice destinatario or PEC); email consent and suppression; merging duplicates. Publishes the `ContactPicker` form component and the `ContactPanel` extension point for the contact page.
+**Contacts** (1). People and companies; roles (client, supplier, partner, other; a contact may hold several); validated fiscal identity (through the Kernel), one live contact per VAT number and per tax code; SdI addressing (`SdiAddress`: codice destinatario, PEC, portal, abroad); email consent and suppression (bounce, complaint, unsubscribe, the owner), with `isMailable()` requiring an address, consent and no suppression; merging duplicates (blanks filled, roles joined, the safer email state kept, the duplicate hidden but kept, `ContactsMerged` dispatched inside the transaction). Contacts are never deleted. Publishes the `ContactPicker` form component and the `ContactPanel` extension point for the contact page.
 
 **Catalog** (2). Sellable services with default price, VAT treatment (rate or natura) and cadence. A template source only: lines are copied into documents, so the catalog never changes an issued document.
 
-**Cash** (2). Accounts (bank, card, cash, PayPal…), movements in and out, categories, recurring expenses, analytics, and the cash-flow projection (consumer of the `CashFlowSchedule` extension point). Later: bank-statement import and reconciliation.
+**Cash** (2). Accounts (bank, card, cash, PayPal…), movements in and out, categories, recurring expenses, analytics, and the cash-flow projection (consumer of the `CashFlowSchedule` extension point). `RecordMovement` is the one way money moves; an allocated movement is changed or removed only by the module that allocated it, which proves it by passing the allocation. A movement flagged as not taxable (a transfer, the owner's own money) counts in balances but not in the analytics. `AllocationPresenter` lets allocating modules label and link their documents on the Cash screens. Later: bank-statement import and reconciliation.
 
-**Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI; FatturaPA XML; the SdI channel over PEC; courtesy PDFs; stamp duty; payments.
+**Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI or imported; FatturaPA XML (built with `XMLWriter`, validated against the bundled XSD at issue); the SdI channel over PEC; courtesy PDFs; stamp duty and the INPS contribution; payments (`RecordPayment`, `RemovePayment`, with `invoicing:rebuild-paid` as the consistency rebuild). Every document's figures go through one `TotalsCalculator` on the Kernel's engine, and the seller and customer are frozen as `PartySnapshot`s at issue.
 
-**Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined, expired) and PDF. Accepting one creates an invoice draft or a payment request through Invoicing.
+**Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined; expired is derived from the validity date) and PDF. Their figures come from Invoicing's `DocumentFigures` and their PDF from its `RenderDocumentPdf`, so one engine and one layout serve every document. Accepting one creates an invoice draft or a payment request through Invoicing, in the same transaction.
 
-**Websites** (3). Sites run for clients: URL, owner, hosting renewals, subscription (billed by a recurring invoice created through Invoicing), uptime checks run concurrently.
+**Websites** (3). Sites run for clients: URL and indexed host, owner, status, hosting renewals on a step rule (`LogHostingRenewal`, idempotent per period), subscription (a recurring invoice created through Invoicing's `CreateRecurringInvoice`; the website keeps its id), uptime checks run concurrently in one HTTP pool (`websites.uptime-check`), down after two failures in a row.
 
-**Domains** (3). Registrations: registrar, expiry, auto-renew, renewal cost, link to a website. "Log renewal" records the cash movement and rolls the expiry forward, once per period.
+**Domains** (3). Registrations: registrar, expiry, auto-renew, renewal cost and cadence in months, link to a website. "Log renewal" (`LogDomainRenewal`) records the cash movement and rolls the expiry forward by whole months, once per period; "expired" is derived by comparing the expiry with today.
 
 **Repositories** (3). Code repositories linked to a website and a client.
 
-**Leads** (4). The sales pipeline. Converting a lead creates the contact, and optionally a quote and a website, in one transaction.
+**Leads** (4). The sales pipeline (new, contacted, qualified, won, lost) with follow-up dates. `ConvertLead` creates the contact (or takes an existing one), and optionally a quote and a website, in one transaction; the lead is won with the links.
 
-**Calendar** (4). Cal.com bookings from signed webhooks plus a periodic sync, linked to contacts by email.
+**Calendar** (4). Cal.com bookings from signed webhooks (`X-Cal-Signature-256`, HMAC of the raw body; each delivery handled once, keyed by the body's hash) plus an hourly sync through the API, one booking per Cal.com uid whatever the channel, linked to contacts by the attendee's email. Read-only here: Cal.com is where bookings change.
 
-**Mail** (4). Campaigns through Amazon SES: audience from Contacts (consent respected), per-recipient sends with rate limiting and retries, SES events through signed SNS messages (deduplicated), a bounce policy (permanent bounce: suppress; temporary: retry, suppress after repeated failures), and RFC 8058 one-click unsubscribe.
+**Mail** (4). Campaigns through Amazon SES: audience from Contacts' `SearchContacts::mailable` (consent respected, frozen at start), one queued job per recipient through a rate limiter with a retry budget in time, "sent" only when every recipient is final, SES events through signed SNS messages (verified, one per SNS MessageId), a bounce policy (permanent bounce or complaint: suppress; temporary: count, suppress after repeated failures), and RFC 8058 one-click unsubscribe (POST only; GET shows a page). Sender, rate and thresholds are settings; keys are env.
 
 ### 4.3 Inside a module
 
@@ -114,10 +116,14 @@ app/Modules/{Module}/
     Contracts/                   extension points this module consumes              │
     Filament/Components/         UI pieces other modules may embed                  ┘
     Models/                      Eloquent models
-    Filament/                    resources, pages, widgets
+    Filament/                    resources, pages, widgets, and the module's panel plugin
     Integrations/                adapters to external systems (PEC, SES, Cal.com)
+    Jobs/                        recurring jobs (Scheduling's `ScheduledJob` contract)
+    Contributions/               implementations of lower modules' extension points
+    Listeners/                   listeners for lower modules' events
+    Console/                     artisan commands
     Database/                    migrations, factories, seeders
-    {Module}ServiceProvider.php
+    {Module}ServiceProvider.php  migrations, bindings, the panel plugin and job tags
 ```
 
 Architecture tests enforce:
@@ -126,7 +132,11 @@ Architecture tests enforce:
 - dependencies follow the layers of §4.1;
 - `Kernel` depends on no module;
 - events carry no models; DTOs are final and readonly;
-- no `env()` outside `config/`, no `dd()`/`dump()`, no `translatedFormat()` (it reads PHP date tokens, not ISO ones).
+- no `env()` outside `config/`, no `dd()`/`dump()`, no `translatedFormat()` (it reads PHP date tokens, not ISO ones);
+- no Carbon month arithmetic outside the Kernel (`Months`, `Recurrence`), so a date never overflows or drifts;
+- every module is listed in `config/modules.php` with its layer, and its provider registered in layer order.
+
+The layer table lives in `config/modules.php`; `tests/Arch` reads it. A module's provider extends `App\Support\ModuleServiceProvider`: it loads the module's migrations and tags its Filament plugin, which the panel provider collects.
 
 ### 4.4 Composition across modules
 
@@ -175,7 +185,7 @@ Architecture tests enforce:
 - **Draft**: editable, deletable, no number.
 - **Issue** (one use case): allocate the number; freeze the seller and customer snapshots (fiscal identity, address, SdI addressing) onto the document; compute and freeze the totals; build the XML and validate it (schema and business rules); store the XML and the courtesy PDF in Files. From here on the content is immutable.
 - **Send** by PEC (the default), or **export** the XML for upload to the Agenzia's portal and mark it sent manually. Either way it must reach SdI within 12 days of the operation — for services, of the payment — and the app counts down.
-- **Delivered, Not delivered, Rejected** come from SdI's notifications ([sdi.md](sdi.md)). A rejected invoice counts as never issued; it is fixed and resent within 5 days with the same number and date, or voided and replaced by a new invoice.
+- **Delivered, Not delivered, Rejected** come from SdI's notifications ([sdi.md](sdi.md)). A rejected invoice counts as never issued: `UpdateDraft` accepts it, `IssueInvoice::reissue` rebuilds it within 5 days with the same number and date (and a new file name), or `VoidInvoice` closes it and a new invoice takes its place. Void is only for rejected invoices; everything else is cancelled by a credit note.
 - **Payment state** is separate from the lifecycle: unpaid, partially paid, paid, and overdue when past due — derived from the cash movements allocated to the invoice. Cancelling is not a state: it is a credit note for the full amount.
 - **Credit notes** (TD04) reference the original invoice (`DatiFattureCollegate`) and follow the same lifecycle.
 - **Payment requests** (pro forma) are not fiscal documents and never reach SdI. Services are deemed performed when paid (art. 6 DPR 633/72), so a freelancer often asks for payment first and invoices on receipt: one action turns a paid request into an invoice dated on the payment.
@@ -209,7 +219,7 @@ Architecture tests enforce:
 
 - Docker images for the app, the queue worker (Horizon) and the scheduler; PostgreSQL; Redis; Caddy for TLS.
 - Secrets — PEC password, SES keys, app key — live only in the server's environment, never in the database or the repository.
-- One owner account with two-factor authentication. Issuing, sending and voiding fiscal documents are recorded in an audit trail.
+- One owner account, created with `php artisan owner:create` (no default user, no seeded password), with mandatory two-factor authentication (TOTP, with recovery codes; secrets stored encrypted). Issuing, sending and voiding fiscal documents are recorded in the audit trail (the Audit module).
 - Nightly backups of the database and files to S3-compatible storage, with a restore drill in the runbook. Legal archiving of invoices is separate — see [sdi.md §8](sdi.md#8-archiving-conservazione).
 - Production-safety tests (no default credentials, gated operations dashboards, no dev-only packages at runtime), ported from hive-crm.
 

@@ -1,0 +1,18 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - app
+        - bootstrap/app.php
+        - bootstrap/providers.php
+        - config
+        - database
+        - routes
+        - tests/TestCase.php
+        - tests/Support
+        - tests/Arch/Modules.php
+    # Pest test files are closures over a dynamically typed $this: they are
+    # covered by running them, not by analysing them.
+    tmpDir: storage/framework/phpstan

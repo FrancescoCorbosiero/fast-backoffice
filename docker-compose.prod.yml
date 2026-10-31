@@ -1,0 +1,115 @@
+# Production (design.md §7, docs/runbook.md): Caddy in front, PHP-FPM behind,
+# Horizon for the queue, the scheduler, PostgreSQL 18, Redis, and a nightly
+# backup to S3-compatible storage. Configuration comes from .env.production.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+
+x-app: &app
+  image: fast-backoffice/app:latest
+  build:
+    context: .
+    dockerfile: docker/prod/Dockerfile
+    target: app
+  env_file: .env.production
+  environment:
+    DB_HOST: pgsql
+    REDIS_HOST: redis
+  restart: unless-stopped
+  depends_on:
+    pgsql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '5'
+
+services:
+  web:
+    image: fast-backoffice/web:latest
+    build:
+      context: .
+      dockerfile: docker/prod/Dockerfile
+      target: web
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.production}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env.production}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    <<: *app
+    healthcheck:
+      test: ['CMD-SHELL', 'php -r "exit(fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  horizon:
+    <<: *app
+    command: php artisan horizon
+    healthcheck:
+      test: ['CMD', 'php', 'artisan', 'horizon:status']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  scheduler:
+    <<: *app
+    command: php artisan schedule:work
+
+  pgsql:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-fast_backoffice}
+      # Both come from .env.production; Compose refuses to start without them.
+      POSTGRES_USER: ${DB_USERNAME:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+    volumes:
+      - pgsql:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-q', '-d', '${DB_DATABASE:-fast_backoffice}', '-U', '${DB_USERNAME}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backup:
+    build:
+      context: docker/backup
+    env_file: .env.production
+    environment:
+      DB_HOST: pgsql
+      BACKUP_HOUR: ${BACKUP_HOUR:-03}
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgsql:
+  redis:
+  caddy_data:
+  caddy_config:

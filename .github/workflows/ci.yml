@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Pint · Larastan · Pest (PostgreSQL 18, GreenMail)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: fast_backoffice_test
+          POSTGRES_USER: fast
+          POSTGRES_PASSWORD: fast
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fast -d fast_backoffice_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      greenmail:
+        image: greenmail/standalone:2.1.3
+        env:
+          GREENMAIL_OPTS: -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=pec:secret@studio.test -Dgreenmail.verbose
+        ports:
+          - 3025:3025
+          - 3143:3143
+
+    env:
+      PEC_TEST_HOST: 127.0.0.1
+      PEC_TEST_SMTP_PORT: 3025
+      PEC_TEST_IMAP_PORT: 3143
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: fast_backoffice_test
+      DB_USERNAME: fast
+      DB_PASSWORD: fast
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, pdo_pgsql, pgsql, redis, gd, zip, bcmath, xml, mbstring
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json and composer.lock
+        run: composer validate --strict
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare the environment file
+        run: cp .env.example .env && php artisan key:generate --force --ansi
+
+      - name: Code style (Pint)
+        run: composer lint
+
+      - name: Static analysis (Larastan, level max)
+        run: composer analyse
+
+      - name: Wait for the local mail server (GreenMail)
+        run: |
+          for i in $(seq 1 30); do
+            (echo > /dev/tcp/127.0.0.1/3143) 2>/dev/null && exit 0
+            sleep 1
+          done
+          echo "GreenMail not reachable" && exit 1
+
+      - name: "Tests (Pest: Unit, Feature, Arch)"
+        run: composer test
