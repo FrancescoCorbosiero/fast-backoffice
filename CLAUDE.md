@@ -33,6 +33,8 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | Mutation testing on the Kernel | `composer test:mutate` (needs `pcov` or Xdebug; not part of CI) |
 | Create the owner | `php artisan owner:create you@example.test` |
 | Run a scheduled job now | `php artisan scheduling:run scheduling.prune-runs` |
+| Regenerate the FatturaPA golden files | `UPDATE_FATTURAPA_GOLDEN=1 vendor/bin/pest tests/Feature/Invoicing/TotalsAndXmlTest.php` then review the diff |
+| Rebuild cached paid amounts | `php artisan invoicing:rebuild-paid` |
 | Serve locally | `php artisan serve` (then `/admin`) |
 | Docker development environment | `docker compose up -d`, then the commands above through `docker compose exec app …` |
 

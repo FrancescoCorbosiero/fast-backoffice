@@ -24,7 +24,7 @@ function freshSchedule(): Schedule
 }
 
 it('collects the jobs defined in code', function (): void {
-    expect(array_keys(app(JobRegistry::class)->all()))->toBe(['scheduling.prune-runs'])
+    expect(array_keys(app(JobRegistry::class)->all()))->toContain('scheduling.prune-runs')
         ->and(app(JobRegistry::class)->get('scheduling.prune-runs'))->toBeInstanceOf(PruneJobRuns::class);
 });
 

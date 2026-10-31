@@ -39,15 +39,17 @@ Notes: the dashboard carries the year-to-date figures, the 12-month chart and th
 
 ## Phase 3 — Invoicing core (manual sending)
 
-- [ ] Catalog
-- [ ] Drafts; issue (number, snapshots, frozen totals); credit notes; payment requests
-- [ ] Payments through Cash (`RecordPayment`, `RemovePayment`), payment state, overdue
-- [ ] FatturaPA XML builder validated against the official XSD; export for manual upload; "mark as sent manually"
-- [ ] Courtesy PDF (choose the renderer)
-- [ ] Stamp duty, flat-rate regime and INPS contribution, driven by settings
-- [ ] Recurring invoices (anchor day; drafts, or issue automatically when opted in)
-- [ ] Import FatturaPA files: supplier invoices, and the owner's invoices issued elsewhere this year
-- [ ] Contributions: receivables and recurring invoices to the cash-flow projection; invoices to the contact page
+- [x] Catalog
+- [x] Drafts; issue (number, snapshots, frozen totals); credit notes; payment requests
+- [x] Payments through Cash (`RecordPayment`, `RemovePayment`), payment state, overdue
+- [x] FatturaPA XML builder validated against the official XSD; export for manual upload; "mark as sent manually"
+- [x] Courtesy PDF (choose the renderer)
+- [x] Stamp duty, flat-rate regime and INPS contribution, driven by settings
+- [x] Recurring invoices (anchor day; drafts, or issue automatically when opted in)
+- [x] Import FatturaPA files: supplier invoices, and the owner's invoices issued elsewhere this year
+- [x] Contributions: receivables and recurring invoices to the cash-flow projection; invoices to the contact page
+
+Notes: the renderer is dompdf (`barryvdh/laravel-dompdf`), as in hive-crm. The XSD is v1.2.3, taken from a public mirror because the Agenzia's site was unreachable (`resources/fatturapa/README.md`). Golden files live in `tests/Fixtures/fatturapa` (regenerate with `UPDATE_FATTURAPA_GOLDEN=1`). Payments are recorded on invoices only; a credit note settles by itself (a refund, if any, is a plain cash movement). The INPS contribution follows the VAT treatment of the invoice's largest group: **verify** with the accountant. Voiding after a rejection is phase 5.
 
 ## Phase 4 — Quotes
 

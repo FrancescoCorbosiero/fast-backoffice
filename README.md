@@ -2,7 +2,7 @@
 
 A back office for a one-person Italian web studio: clients and suppliers, quotes, Italian electronic invoices sent to and received from SdI over PEC, cash flow, and the websites and domains the studio runs for its clients.
 
-**Status: phases 0 to 2 (foundation, contacts, cash) done; phase 3 (invoicing core) next.** See the [roadmap](docs/roadmap.md).
+**Status: phases 0 to 3 done (foundation, contacts, cash, invoicing with manual sending); phase 4 (quotes) next.** See the [roadmap](docs/roadmap.md).
 
 - [Design](docs/design.md) — scope, principles, modules, core models
 - [Electronic invoicing](docs/sdi.md) — FatturaPA, SdI over PEC, stamp duty, archiving

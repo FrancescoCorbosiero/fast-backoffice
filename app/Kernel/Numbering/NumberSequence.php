@@ -64,6 +64,27 @@ final readonly class NumberSequence
     }
 
     /**
+     * Makes sure the next number comes after $number: for documents
+     * issued elsewhere and recorded here. Must run inside a transaction.
+     */
+    public function advanceTo(string $series, int $year, int $number): void
+    {
+        self::assertSeries($series);
+
+        if ($this->db->transactionLevel() === 0) {
+            throw new LogicException('Numbers are allocated inside the issuing transaction.');
+        }
+
+        $this->db->table(self::TABLE)->insertOrIgnore(['series' => $series, 'year' => $year, 'last_number' => 0]);
+
+        $this->db->table(self::TABLE)
+            ->where('series', $series)
+            ->where('year', $year)
+            ->where('last_number', '<', $number)
+            ->update(['last_number' => $number]);
+    }
+
+    /**
      * The last number allocated, or null when the series hasn't been used
      * that year (so its opening number can still be changed).
      */

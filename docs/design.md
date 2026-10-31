@@ -47,7 +47,7 @@ Each one exists because hive-crm broke it somewhere.
 | Tests | Pest 4: Unit, Feature and Arch suites (Pest 5 needs PHP 8.4 everywhere, including the development machine; it is a phase 8 item) |
 | Static analysis | Larastan 3 at level max |
 | Code style | Laravel Pint |
-| PDF | Decided in phase 3: dompdf (as in hive-crm) or an HTML-to-PDF service for better typography |
+| PDF | dompdf through `barryvdh/laravel-dompdf` (decided in phase 3): no external service, DejaVu Sans for the euro sign |
 | Hosting | Docker (app, worker, scheduler, PostgreSQL, Redis) behind Caddy, as in hive-crm |
 
 These are the current stable majors (October 2026); `composer.lock` pins exact versions, resolved for PHP 8.3 (`config.platform.php`) so the same lock installs on 8.3 and 8.4.
@@ -86,7 +86,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Cash** (2). Accounts (bank, card, cash, PayPal…), movements in and out, categories, recurring expenses, analytics, and the cash-flow projection (consumer of the `CashFlowSchedule` extension point). `RecordMovement` is the one way money moves; an allocated movement is changed or removed only by the module that allocated it, which proves it by passing the allocation. A movement flagged as not taxable (a transfer, the owner's own money) counts in balances but not in the analytics. `AllocationPresenter` lets allocating modules label and link their documents on the Cash screens. Later: bank-statement import and reconciliation.
 
-**Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI; FatturaPA XML; the SdI channel over PEC; courtesy PDFs; stamp duty; payments.
+**Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI or imported; FatturaPA XML (built with `XMLWriter`, validated against the bundled XSD at issue); the SdI channel over PEC; courtesy PDFs; stamp duty and the INPS contribution; payments (`RecordPayment`, `RemovePayment`, with `invoicing:rebuild-paid` as the consistency rebuild). Every document's figures go through one `TotalsCalculator` on the Kernel's engine, and the seller and customer are frozen as `PartySnapshot`s at issue.
 
 **Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined, expired) and PDF. Accepting one creates an invoice draft or a payment request through Invoicing.
 

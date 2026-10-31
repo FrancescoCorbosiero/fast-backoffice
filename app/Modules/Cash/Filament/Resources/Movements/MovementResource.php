@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Cash\Filament\Resources\Movements;
 
+use App\Kernel\Reference;
 use App\Modules\Cash\Enums\Direction;
+use App\Modules\Cash\Filament\Allocations;
 use App\Modules\Cash\Filament\Amounts;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\CreateMovement;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\EditMovement;
@@ -79,7 +81,8 @@ class MovementResource extends Resource
             ->columns([
                 TextColumn::make('occurred_on')->label('Data')->date('d/m/Y')->sortable(),
                 TextColumn::make('description')->label('Descrizione')->searchable()->wrap()
-                    ->description(fn (Movement $record): ?string => $record->allocation),
+                    ->description(fn (Movement $record): ?string => $record->allocation === null ? null : Allocations::label(Reference::fromString($record->allocation)))
+                    ->url(fn (Movement $record): ?string => $record->allocation === null ? null : Allocations::url(Reference::fromString($record->allocation))),
                 TextColumn::make('amount')->label('Importo')->alignEnd()
                     ->state(fn (Movement $record): string => Amounts::format($record->signedAmount()))
                     ->color(fn (Movement $record): string => $record->direction->color()),
