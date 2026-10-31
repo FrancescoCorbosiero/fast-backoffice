@@ -80,7 +80,7 @@ Notes: layer 3 is `Websites`, `Domains`, `Repositories` (Domains and Repositorie
 ## Phase 7 — Growth
 
 - [x] Leads, with `ConvertLead` (contact, quote and website in one transaction)
-- [ ] Calendar: Cal.com webhooks and periodic sync
+- [x] Calendar: Cal.com webhooks and periodic sync
 - [ ] Mail campaigns: SES, rate limiting, retries, SNS deduplication, bounce policy, RFC 8058 unsubscribe
 
 ## Phase 8 — Production

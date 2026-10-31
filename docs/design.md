@@ -98,7 +98,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Leads** (4). The sales pipeline. Converting a lead creates the contact, and optionally a quote and a website, in one transaction.
 
-**Calendar** (4). Cal.com bookings from signed webhooks plus a periodic sync, linked to contacts by email.
+**Calendar** (4). Cal.com bookings from signed webhooks (`X-Cal-Signature-256`, HMAC of the raw body; each delivery handled once, keyed by the body's hash) plus an hourly sync through the API, one booking per Cal.com uid whatever the channel, linked to contacts by the attendee's email. Read-only here: Cal.com is where bookings change.
 
 **Mail** (4). Campaigns through Amazon SES: audience from Contacts (consent respected), per-recipient sends with rate limiting and retries, SES events through signed SNS messages (deduplicated), a bounce policy (permanent bounce: suppress; temporary: retry, suppress after repeated failures), and RFC 8058 one-click unsubscribe.
 

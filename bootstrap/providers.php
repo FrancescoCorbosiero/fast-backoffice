@@ -22,6 +22,7 @@ return [
     App\Modules\Domains\DomainsServiceProvider::class,
     App\Modules\Repositories\RepositoriesServiceProvider::class,
     App\Modules\Leads\LeadsServiceProvider::class,
+    App\Modules\Calendar\CalendarServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\HorizonServiceProvider::class,
 ];
