@@ -72,8 +72,9 @@ services:
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_DATABASE:-fast_backoffice}
-      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env.production}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.production}
+      # Both come from .env.production; Compose refuses to start without them.
+      POSTGRES_USER: ${DB_USERNAME:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
     volumes:
       - pgsql:/var/lib/postgresql/data
     healthcheck:

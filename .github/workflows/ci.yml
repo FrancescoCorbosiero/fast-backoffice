@@ -78,7 +78,12 @@ jobs:
         run: composer analyse
 
       - name: Wait for the local mail server (GreenMail)
-        run: for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/3143) 2>/dev/null && exit 0; sleep 1; done; echo "GreenMail not reachable" && exit 1
+        run: |
+          for i in $(seq 1 30); do
+            (echo > /dev/tcp/127.0.0.1/3143) 2>/dev/null && exit 0
+            sleep 1
+          done
+          echo "GreenMail not reachable" && exit 1
 
-      - name: Tests (Pest: Unit, Feature, Arch)
+      - name: "Tests (Pest: Unit, Feature, Arch)"
         run: composer test
