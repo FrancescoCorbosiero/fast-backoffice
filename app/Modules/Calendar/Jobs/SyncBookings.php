@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Calendar\Jobs;
 
+use App\Kernel\Dates\Months;
 use App\Modules\Calendar\Actions\RecordBooking;
 use App\Modules\Calendar\Integrations\CalComClient;
 use App\Modules\Scheduling\Contracts\ScheduledJob;
@@ -50,7 +51,7 @@ final readonly class SyncBookings implements ScheduledJob
 
         $now = Date::now();
         try {
-            $bookings = $this->client->bookingsBetween($now->subMonth(), $now->addMonths(6));
+            $bookings = $this->client->bookingsBetween(Months::subtract($now, 1), Months::add($now, 6));
         } catch (Throwable $exception) {
             return JobResult::failure('Sincronizzazione fallita: '.$exception->getMessage());
         }
