@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Prepare the environment file
+        run: cp .env.example .env && php artisan key:generate --force --ansi
+
       - name: Code style (Pint)
         run: composer lint
 

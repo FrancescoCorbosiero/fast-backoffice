@@ -9,7 +9,8 @@ use App\Modules\Invoicing\Integrations\Pec\SmtpImapPecMailbox;
 
 /**
  * The real SMTP/IMAP adapter against a local mail server (GreenMail in CI,
- * sdi.md §10). Skipped when none is reachable: set PEC_TEST_HOST to run it.
+ * sdi.md §10; its user is created as pec:secret@studio.test, so the login is
+ * "pec"). Skipped when none is reachable: set PEC_TEST_HOST to run it.
  */
 it('sends a message over SMTP, reads it back over IMAP, flags it and never sees it again', function (): void {
     $host = getenv('PEC_TEST_HOST');
@@ -17,8 +18,8 @@ it('sends a message over SMTP, reads it back over IMAP, flags it and never sees 
         $this->markTestSkipped('No local mail server: set PEC_TEST_HOST (and PEC_TEST_SMTP_PORT, PEC_TEST_IMAP_PORT) to run the integration test.');
     }
 
-    config()->set('pec.smtp', ['host' => $host, 'port' => (int) (getenv('PEC_TEST_SMTP_PORT') ?: 3025), 'encryption' => 'none', 'username' => 'pec@studio.test', 'password' => 'secret']);
-    config()->set('pec.imap', ['host' => $host, 'port' => (int) (getenv('PEC_TEST_IMAP_PORT') ?: 3143), 'encryption' => 'none', 'username' => 'pec@studio.test', 'password' => 'secret', 'folder' => 'INBOX', 'validate_cert' => false]);
+    config()->set('pec.smtp', ['host' => $host, 'port' => (int) (getenv('PEC_TEST_SMTP_PORT') ?: 3025), 'encryption' => 'none', 'username' => 'pec', 'password' => 'secret']);
+    config()->set('pec.imap', ['host' => $host, 'port' => (int) (getenv('PEC_TEST_IMAP_PORT') ?: 3143), 'encryption' => 'none', 'username' => 'pec', 'password' => 'secret', 'folder' => 'INBOX', 'validate_cert' => false]);
 
     $mailbox = app(SmtpImapPecMailbox::class);
     expect($mailbox->isConfigured())->toBeTrue();
