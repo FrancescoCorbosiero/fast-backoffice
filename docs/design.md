@@ -219,7 +219,7 @@ The layer table lives in `config/modules.php`; `tests/Arch` reads it. A module's
 
 - Docker images for the app, the queue worker (Horizon) and the scheduler; PostgreSQL; Redis; Caddy for TLS.
 - Secrets — PEC password, SES keys, app key — live only in the server's environment, never in the database or the repository.
-- One owner account, created with `php artisan owner:create` (no default user, no seeded password), with mandatory two-factor authentication (TOTP, with recovery codes; secrets stored encrypted). Issuing, sending and voiding fiscal documents are recorded in the audit trail (the Audit module).
+- One owner account, created with `php artisan owner:create` (no default user, no seeded password), with optional two-factor authentication (TOTP with recovery codes, enabled from the profile page; secrets stored encrypted). Issuing, sending and voiding fiscal documents are recorded in the audit trail (the Audit module).
 - Nightly backups of the database and files to S3-compatible storage, with a restore drill in the runbook. Legal archiving of invoices is separate — see [sdi.md §8](sdi.md#8-archiving-conservazione).
 - Production-safety tests (no default credentials, gated operations dashboards, no dev-only packages at runtime), ported from hive-crm.
 

@@ -19,7 +19,7 @@ docker compose exec app composer setup
 docker compose exec app php artisan owner:create you@example.test
 ```
 
-Then open <http://localhost:8000/admin>, sign in and set up two-factor authentication (required). Without Docker: `composer setup`, `php artisan owner:create you@example.test`, `php artisan serve`.
+Then open <http://localhost:8000/admin> and sign in (two-factor authentication is optional, from the profile page). Without Docker: `composer setup`, `php artisan owner:create you@example.test`, `php artisan serve`.
 
 Checks, as CI runs them: `composer ci` (Pint, Larastan at level max, Pest on PostgreSQL).
 

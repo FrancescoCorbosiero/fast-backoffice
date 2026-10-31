@@ -43,11 +43,11 @@ it('shows the login page', function (): void {
     $this->get('/admin/login')->assertOk();
 });
 
-it('requires two-factor authentication before the panel opens', function (): void {
+it('opens the panel without two-factor authentication, which the owner can turn on from the profile', function (): void {
     $owner = User::factory()->create();
 
-    $this->actingAs($owner)->get('/admin')->assertRedirect();
-    expect(session()->get('url.intended'))->not->toBeNull();
+    $this->actingAs($owner)->get('/admin')->assertOk();
+    $this->actingAs($owner)->get('/admin/profile')->assertOk()->assertSee('Autenticazione a due fattori');
 
     $owner->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
 
