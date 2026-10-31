@@ -2,8 +2,8 @@
 # and Redis. Files stay on the local disk (storage/app/private/files); the
 # S3-compatible store is only needed in production (docker-compose.prod.yml).
 #
-#   docker compose up -d
-#   docker compose exec app composer setup
+#   docker compose up -d            (the first start installs and migrates)
+#   docker compose exec app php artisan db:seed
 #   docker compose exec app php artisan owner:create you@example.test
 #   open http://localhost:8000/admin
 
@@ -26,17 +26,18 @@ x-app: &app
 services:
   app:
     <<: *app
-    command: php artisan serve --host=0.0.0.0 --port=8000
+    # A fresh checkout has no vendor/ yet: install on first start, then serve.
+    command: sh -c "[ -d vendor ] || composer setup; php artisan serve --host=0.0.0.0 --port=8000"
     ports:
       - '${APP_PORT:-8000}:8000'
 
   horizon:
     <<: *app
-    command: php artisan horizon
+    command: sh -c "while [ ! -f vendor/autoload.php ]; do sleep 2; done; php artisan horizon"
 
   scheduler:
     <<: *app
-    command: php artisan schedule:work
+    command: sh -c "while [ ! -f vendor/autoload.php ]; do sleep 2; done; php artisan schedule:work"
 
   pgsql:
     image: postgres:18-alpine
