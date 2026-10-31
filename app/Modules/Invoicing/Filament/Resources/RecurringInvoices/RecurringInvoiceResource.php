@@ -8,7 +8,7 @@ use App\Kernel\Dates\Frequency;
 use App\Modules\Contacts\Enums\ContactRole;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Invoicing\Actions\IssueRecurringInvoice;
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\Pages\CreateRecurringInvoice;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\Pages\EditRecurringInvoice;

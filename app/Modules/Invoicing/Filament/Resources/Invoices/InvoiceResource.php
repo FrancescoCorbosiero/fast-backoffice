@@ -9,7 +9,7 @@ use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Invoicing\Enums\DocumentType;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
 use App\Modules\Invoicing\Enums\PaymentState;
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\CreateInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\EditInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ListInvoices;

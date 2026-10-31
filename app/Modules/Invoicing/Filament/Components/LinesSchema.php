@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Invoicing\Filament;
+namespace App\Modules\Invoicing\Filament\Components;
 
 use App\Kernel\Money\Money;
 use App\Kernel\Money\Quantity;

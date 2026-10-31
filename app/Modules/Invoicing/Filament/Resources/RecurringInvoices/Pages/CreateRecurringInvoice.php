@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Invoicing\Filament\Resources\RecurringInvoices\Pages;
 
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\RecurringInvoiceResource;
 use Filament\Resources\Pages\CreateRecord;
 

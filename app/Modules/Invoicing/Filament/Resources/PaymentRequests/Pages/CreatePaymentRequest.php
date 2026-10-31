@@ -6,7 +6,7 @@ namespace App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages;
 
 use App\Modules\Invoicing\Actions\CreatePaymentRequest as CreatePaymentRequestAction;
 use App\Modules\Invoicing\Data\DraftInput;
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\PaymentRequestResource;
 use App\Modules\Invoicing\Models\PaymentRequest;
 use Carbon\CarbonImmutable;

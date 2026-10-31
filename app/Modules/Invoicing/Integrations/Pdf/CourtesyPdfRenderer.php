@@ -31,6 +31,9 @@ final class CourtesyPdfRenderer
         ?string $notes,
         ?string $relatedTitle = null,
         bool $isFiscal = true,
+        string $dueLabel = 'Scadenza',
+        ?string $subtitle = null,
+        ?string $footer = null,
     ): string {
         return Pdf::loadView('invoicing.document', [
             'title' => $title,
@@ -44,6 +47,9 @@ final class CourtesyPdfRenderer
             'notes' => $notes,
             'relatedTitle' => $relatedTitle,
             'isFiscal' => $isFiscal,
+            'dueLabel' => $dueLabel,
+            'subtitle' => $subtitle,
+            'footer' => $footer,
         ])->setPaper('a4')->output();
     }
 }

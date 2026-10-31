@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Invoicing\Filament;
+namespace App\Modules\Invoicing\Filament\Components;
 
 use App\Modules\Invoicing\Data\DocumentTotals;
 use App\Modules\Invoicing\Data\LineInput;

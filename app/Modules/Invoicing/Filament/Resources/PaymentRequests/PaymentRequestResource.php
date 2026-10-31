@@ -7,7 +7,7 @@ namespace App\Modules\Invoicing\Filament\Resources\PaymentRequests;
 use App\Modules\Contacts\Enums\ContactRole;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Invoicing\Enums\PaymentRequestStatus;
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\CreatePaymentRequest;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\ListPaymentRequests;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\ViewPaymentRequest;

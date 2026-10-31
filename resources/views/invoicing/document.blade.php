@@ -28,6 +28,9 @@
             <td>
                 <h1>{{ $title }}</h1>
                 <div class="muted">del {{ $date->isoFormat('D MMMM YYYY') }}</div>
+                @if ($subtitle !== null)
+                    <div class="muted">{{ $subtitle }}</div>
+                @endif
                 @if ($relatedTitle !== null)
                     <div class="muted">a storno di {{ $relatedTitle }}</div>
                 @endif
@@ -54,7 +57,7 @@
             </td>
             <td class="right">
                 @if ($dueOn !== null)
-                    <div class="label">Scadenza</div>
+                    <div class="label">{{ $dueLabel }}</div>
                     <div>{{ $dueOn->isoFormat('D MMMM YYYY') }}</div>
                 @endif
                 @if ($seller->iban !== null)
@@ -116,7 +119,9 @@
     @endif
 
     <div class="footer">
-        @if ($isFiscal)
+        @if ($footer !== null)
+            {{ $footer }}
+        @elseif ($isFiscal)
             Copia di cortesia: il documento fiscale è la fattura elettronica trasmessa al Sistema di Interscambio, disponibile nell'area riservata dell'Agenzia delle Entrate.
         @else
             Documento non fiscale: la fattura viene emessa al ricevimento del pagamento.

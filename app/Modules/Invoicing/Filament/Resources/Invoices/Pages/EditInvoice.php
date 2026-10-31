@@ -7,7 +7,7 @@ namespace App\Modules\Invoicing\Filament\Resources\Invoices\Pages;
 use App\Modules\Invoicing\Actions\DeleteDraft;
 use App\Modules\Invoicing\Actions\UpdateDraft;
 use App\Modules\Invoicing\Data\DraftInput;
-use App\Modules\Invoicing\Filament\LinesSchema;
+use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Models\Invoice;
 use Filament\Actions\Action;

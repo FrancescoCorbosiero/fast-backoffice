@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Invoicing\Filament\Resources\SupplierInvoices\Pages;
 
 use App\Modules\Files\Queries\ReadFile;
-use App\Modules\Invoicing\Filament\DocumentInfolist;
+use App\Modules\Invoicing\Filament\Components\DocumentInfolist;
 use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\SupplierInvoiceResource;
 use App\Modules\Invoicing\Models\SupplierInvoice;
 use Filament\Actions\Action;

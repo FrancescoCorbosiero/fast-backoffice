@@ -53,8 +53,10 @@ Notes: the renderer is dompdf (`barryvdh/laravel-dompdf`), as in hive-crm. The X
 
 ## Phase 4 — Quotes
 
-- [ ] Quotes with their own numbering, validity, statuses and PDF
-- [ ] Accepting a quote creates an invoice draft or a payment request, through Invoicing
+- [x] Quotes with their own numbering, validity, statuses and PDF
+- [x] Accepting a quote creates an invoice draft or a payment request, through Invoicing
+
+Notes: a quote is numbered when written (`PRV n/year`, non-fiscal). "Expired" is derived by comparing `valid_until` with today, never stored, and an expired quote can still be accepted late. Editing a sent quote takes it back to draft and drops the PDF it was sent with. Invoicing opened `Queries\DocumentFigures` (lines → totals, parties, legal wording), `Actions\RenderDocumentPdf` and `Filament\Components\{LinesSchema, DocumentInfolist}` so Quotes reuses the one engine and one layout.
 
 ## Phase 5 — SdI over PEC
 

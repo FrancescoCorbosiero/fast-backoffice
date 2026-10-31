@@ -88,7 +88,7 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Invoicing** (2). Sales invoices and credit notes with the lifecycle of §5.3; payment requests (pro forma); recurring invoices; supplier invoices received from SdI or imported; FatturaPA XML (built with `XMLWriter`, validated against the bundled XSD at issue); the SdI channel over PEC; courtesy PDFs; stamp duty and the INPS contribution; payments (`RecordPayment`, `RemovePayment`, with `invoicing:rebuild-paid` as the consistency rebuild). Every document's figures go through one `TotalsCalculator` on the Kernel's engine, and the seller and customer are frozen as `PartySnapshot`s at issue.
 
-**Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined, expired) and PDF. Accepting one creates an invoice draft or a payment request through Invoicing.
+**Quotes** (2). Quotations with their own non-fiscal numbering, validity, statuses (draft, sent, accepted, declined; expired is derived from the validity date) and PDF. Their figures come from Invoicing's `DocumentFigures` and their PDF from its `RenderDocumentPdf`, so one engine and one layout serve every document. Accepting one creates an invoice draft or a payment request through Invoicing, in the same transaction.
 
 **Websites** (3). Sites run for clients: URL, owner, hosting renewals, subscription (billed by a recurring invoice created through Invoicing), uptime checks run concurrently.
 

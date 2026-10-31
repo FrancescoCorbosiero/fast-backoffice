@@ -17,7 +17,7 @@ use App\Modules\Invoicing\Data\PaymentData;
 use App\Modules\Invoicing\Data\PaymentInput;
 use App\Modules\Invoicing\DocumentContext;
 use App\Modules\Invoicing\Enums\DocumentType;
-use App\Modules\Invoicing\Filament\DocumentInfolist;
+use App\Modules\Invoicing\Filament\Components\DocumentInfolist;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Models\Invoice;
 use App\Modules\Invoicing\Queries\InvoicePayments;

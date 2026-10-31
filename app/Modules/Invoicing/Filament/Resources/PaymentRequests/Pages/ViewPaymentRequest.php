@@ -12,7 +12,7 @@ use App\Modules\Invoicing\Actions\PayPaymentRequest;
 use App\Modules\Invoicing\Data\PartySnapshot;
 use App\Modules\Invoicing\Data\PaymentInput;
 use App\Modules\Invoicing\Enums\PaymentRequestStatus;
-use App\Modules\Invoicing\Filament\DocumentInfolist;
+use App\Modules\Invoicing\Filament\Components\DocumentInfolist;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\PaymentRequestResource;
 use App\Modules\Invoicing\Models\PaymentRequest;
