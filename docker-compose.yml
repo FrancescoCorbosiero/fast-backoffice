@@ -27,7 +27,9 @@ services:
   app:
     <<: *app
     # A fresh checkout has no vendor/ yet: install on first start, then serve.
-    command: sh -c "[ -d vendor ] || composer setup; php artisan serve --host=0.0.0.0 --port=8000"
+    # PHP's own server rather than "artisan serve": the latter copies .env into
+    # the process and would point the app at 127.0.0.1 instead of the containers.
+    command: sh -c "[ -d vendor ] || composer setup; php -S 0.0.0.0:8000 -t public vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
     ports:
       - '${APP_PORT:-8000}:8000'
 
