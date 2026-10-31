@@ -96,11 +96,11 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Repositories** (3). Code repositories linked to a website and a client.
 
-**Leads** (4). The sales pipeline. Converting a lead creates the contact, and optionally a quote and a website, in one transaction.
+**Leads** (4). The sales pipeline (new, contacted, qualified, won, lost) with follow-up dates. `ConvertLead` creates the contact (or takes an existing one), and optionally a quote and a website, in one transaction; the lead is won with the links.
 
 **Calendar** (4). Cal.com bookings from signed webhooks (`X-Cal-Signature-256`, HMAC of the raw body; each delivery handled once, keyed by the body's hash) plus an hourly sync through the API, one booking per Cal.com uid whatever the channel, linked to contacts by the attendee's email. Read-only here: Cal.com is where bookings change.
 
-**Mail** (4). Campaigns through Amazon SES: audience from Contacts (consent respected), per-recipient sends with rate limiting and retries, SES events through signed SNS messages (deduplicated), a bounce policy (permanent bounce: suppress; temporary: retry, suppress after repeated failures), and RFC 8058 one-click unsubscribe.
+**Mail** (4). Campaigns through Amazon SES: audience from Contacts' `SearchContacts::mailable` (consent respected, frozen at start), one queued job per recipient through a rate limiter with a retry budget in time, "sent" only when every recipient is final, SES events through signed SNS messages (verified, one per SNS MessageId), a bounce policy (permanent bounce or complaint: suppress; temporary: count, suppress after repeated failures), and RFC 8058 one-click unsubscribe (POST only; GET shows a page). Sender, rate and thresholds are settings; keys are env.
 
 ### 4.3 Inside a module
 

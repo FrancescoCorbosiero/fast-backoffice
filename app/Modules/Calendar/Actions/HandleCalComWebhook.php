@@ -9,6 +9,7 @@ use App\Modules\Calendar\Integrations\CalComPayload;
 use App\Modules\Calendar\Integrations\WebhookSignature;
 use App\Modules\Calendar\Models\WebhookEvent;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Date;
 use InvalidArgumentException;
@@ -23,6 +24,7 @@ final readonly class HandleCalComWebhook
     private const array BOOKING_TRIGGERS = ['BOOKING_CREATED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED', 'BOOKING_REJECTED', 'BOOKING_REQUESTED', 'BOOKING_PAID', 'BOOKING_PAYMENT_INITIATED', 'BOOKING_NO_SHOW_UPDATED'];
 
     public function __construct(
+        private ConnectionInterface $db,
         private Repository $config,
         private RecordBooking $record,
     ) {}
@@ -62,15 +64,16 @@ final readonly class HandleCalComWebhook
 
     private function store(string $key, ?string $trigger, string $outcome, ?string $note, ?int $bookingId = null): WebhookResult
     {
+        // A savepoint: a duplicate key must not poison an enclosing transaction.
         try {
-            WebhookEvent::query()->create([
+            $this->db->transaction(fn () => WebhookEvent::query()->create([
                 'idempotency_key' => $key,
                 'trigger' => $trigger === null ? null : mb_substr($trigger, 0, 60),
                 'outcome' => $outcome,
                 'note' => $note === null ? null : mb_substr($note, 0, 500),
                 'booking_id' => $bookingId,
                 'received_at' => Date::now(),
-            ]);
+            ]));
         } catch (UniqueConstraintViolationException) {
             return new WebhookResult('duplicate', $bookingId);
         }

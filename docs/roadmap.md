@@ -81,7 +81,9 @@ Notes: layer 3 is `Websites`, `Domains`, `Repositories` (Domains and Repositorie
 
 - [x] Leads, with `ConvertLead` (contact, quote and website in one transaction)
 - [x] Calendar: Cal.com webhooks and periodic sync
-- [ ] Mail campaigns: SES, rate limiting, retries, SNS deduplication, bounce policy, RFC 8058 unsubscribe
+- [x] Mail campaigns: SES, rate limiting, retries, SNS deduplication, bounce policy, RFC 8058 unsubscribe
+
+Notes: layer 4 is `Leads`, `Calendar`, `Mail`. Campaigns go out through Laravel's mailer named in `config/mail-campaigns.php` ("ses" in production; the AWS keys and the SNS topic ARN are env vars), one queued job per recipient through the `campaign-mail` rate limiter (emails per second from settings), retried on a time budget (`retryUntil`, hours from settings) so a rate-limit release never spends an attempt. "Sending" means queued; a campaign is "sent" only when every recipient reached a final state (`CompleteCampaign`, also run by `mail.reconcile`). SES events arrive as SNS notifications on `POST /webhooks/ses`: signature verified against the certificate SNS points at (amazonaws.com only), topic checked, each SNS MessageId handled once; recipients are matched by our own Message-ID (`mail.commonHeaders.messageId`), then by SES's. Bounce policy: permanent bounce or complaint suppress at once; a temporary bounce counts, suppression after the configured number. Unsubscribe: `GET /unsubscribe/{token}` shows a page and changes nothing; `POST` (RFC 8058 one-click or the page's button) revokes consent and suppresses. Sender, rate and thresholds live in Impostazioni › Campagne email. Still to **verify** on a live account: the Cal.com payload field names (`CalComPayload`) and SES's event shapes against real notifications.
 
 ## Phase 8 — Production
 

@@ -47,6 +47,36 @@ final readonly class SearchContacts
      *
      * @return list<ContactData>
      */
+    /**
+     * Who a marketing email may go to: an address, consent, no suppression
+     * (ContactData::isMailable), optionally within some roles. The audience
+     * of a campaign.
+     *
+     * @param  list<ContactRole>  $roles  empty: any role
+     * @return list<ContactData>
+     */
+    public function mailable(array $roles = []): array
+    {
+        $contacts = Contact::query()->live()
+            ->whereNotNull('email')
+            ->where('email_consent', true)
+            ->whereNull('email_suppressed_at')
+            ->when($roles !== [], function (Builder $query) use ($roles): void {
+                $query->where(function (Builder $query) use ($roles): void {
+                    foreach ($roles as $role) {
+                        $query->orWhere(fn (Builder $q) => $q->withRole($role));
+                    }
+                });
+            })
+            ->orderBy('display_name')
+            ->get();
+
+        return array_values($contacts->map(fn (Contact $contact): ContactData => $contact->toData())->all());
+    }
+
+    /**
+     * @return list<ContactData>
+     */
     public function withRole(ContactRole $role): array
     {
         return array_values(Contact::query()->live()->withRole($role)->orderBy('display_name')->get()
