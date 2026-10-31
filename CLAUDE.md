@@ -8,6 +8,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 2. `docs/design.md` — principles (§2), modules and their rules (§4), core models (§5). Every change must fit them. If a rule genuinely fights a feature, change the design doc in the same change, with the reason.
 3. `docs/sdi.md` — before touching anything that creates, sends or receives a fiscal document.
 4. `docs/lessons-from-hive-crm.md` — the bug classes this project exists to avoid, and the hive-crm tests to port as specifications.
+5. `docs/runbook.md` — how production runs: deploy, backups, restore drill, secrets.
 
 ## Non-negotiables
 
@@ -41,6 +42,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | PEC round-trip test against a local mail server | `PEC_TEST_HOST=127.0.0.1 vendor/bin/pest tests/Feature/Invoicing/PecMailboxIntegrationTest.php` (GreenMail on 3025/3143; CI does this) |
 | Serve locally | `php artisan serve` (then `/admin`) |
 | Docker development environment | `docker compose up -d`, then the commands above through `docker compose exec app …` |
+| Production (build, deploy, backups, restore drill) | `docs/runbook.md`; `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` |
 
 Tests run on PostgreSQL: `phpunit.xml` points at `fast_backoffice_test` on `127.0.0.1` with user and password `fast` (CI overrides these with its service container; `docker/pgsql/create-test-database.sql` creates it in Docker). The Docker images run PHP 8.4; `composer.lock` is resolved for PHP 8.3 so it installs on both.
 

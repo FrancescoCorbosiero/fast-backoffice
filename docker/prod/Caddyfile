@@ -1,0 +1,29 @@
+# Caddy: TLS from Let's Encrypt for $DOMAIN, static files from the public
+# directory, everything else to PHP-FPM in the app container.
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    root * /srv/public
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Webhooks and the unsubscribe endpoints are public by design; the panel is behind the login.
+    php_fastcgi app:9000 {
+        resolve_root_symlink
+    }
+    file_server
+
+    log {
+        output stdout
+        format json
+    }
+}

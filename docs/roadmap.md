@@ -87,7 +87,9 @@ Notes: layer 4 is `Leads`, `Calendar`, `Mail`. Campaigns go out through Laravel'
 
 ## Phase 8 — Production
 
-- [ ] Production Docker images, Caddy, backups with a restore drill, deploy runbook
-- [ ] Production-safety tests
-- [ ] PHP 8.4 everywhere and Pest 5 (the development toolchain was on 8.3 in phase 0)
-- [ ] Optional: import reference data from hive-crm
+- [x] Production Docker images, Caddy, backups with a restore drill, deploy runbook
+- [x] Production-safety tests
+- [ ] PHP 8.4 everywhere and Pest 5 (the development toolchain was on 8.3 in phase 0) — the environment this was built in had PHP 8.3 only; the images and CI run 8.4; the lock moves when every machine does (runbook §7)
+- [ ] Optional: import reference data from hive-crm — not started; hive-crm is not in production
+
+Notes: `docker/prod/Dockerfile` builds two targets from one build — `app` (PHP-FPM 8.4 with production dependencies, Filament assets published, tests and docs stripped; the same image runs Horizon and the scheduler) and `web` (Caddy with `public/`). `docker-compose.prod.yml` wires them with PostgreSQL 18, Redis and the `backup` service (`pg_dump` nightly to S3-compatible storage, verified with `pg_restore --list`, pruned after `BACKUP_KEEP_DAYS`); `restore latest` runs the drill into a scratch database. `docs/runbook.md` has the first deploy, the deploy steps (migrations by hand, `horizon:terminate`), the restore drill, secrets. The images could not be built where this phase was written (no Docker daemon): build them on the server with the runbook's commands before the first deploy.
