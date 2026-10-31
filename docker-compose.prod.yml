@@ -76,7 +76,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME:?}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?}
     volumes:
-      - pgsql:/var/lib/postgresql/data
+      - pgsql:/var/lib/postgresql
     healthcheck:
       test: ['CMD', 'pg_isready', '-q', '-d', '${DB_DATABASE:-fast_backoffice}', '-U', '${DB_USERNAME}']
       interval: 10s
