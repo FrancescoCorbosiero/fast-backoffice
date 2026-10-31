@@ -36,9 +36,10 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->profile(isSimple: false)
+            // Optional: the owner turns it on from their profile page when they want it.
             ->multiFactorAuthentication([
                 AppAuthentication::make()->recoverable(),
-            ], isRequired: true)
+            ])
             ->colors([
                 'primary' => Color::Amber,
             ])

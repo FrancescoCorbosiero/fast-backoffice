@@ -34,7 +34,7 @@ docker compose -f docker-compose.prod.yml exec app php artisan db:seed --force
 docker compose -f docker-compose.prod.yml exec app php artisan owner:create you@example.it
 ```
 
-5. Sign in at `https://$DOMAIN/admin`, set up two-factor authentication when asked, then fill Impostazioni: profilo aziendale, fatture, numerazione, SdI e PEC (sdi.md §9), campagne email.
+5. Sign in at `https://$DOMAIN/admin` (two-factor authentication is optional: profile page, when you want it), then fill Impostazioni: profilo aziendale, fatture, numerazione, SdI e PEC (sdi.md §9), campagne email.
 6. External services: SES (verify the sender, create an SNS topic subscribed to `https://$DOMAIN/webhooks/ses`, put its ARN in `SES_SNS_TOPIC_ARN`); Cal.com (a webhook to `https://$DOMAIN/webhooks/calcom` with the secret in `CALCOM_WEBHOOK_SECRET`, an API key in `CALCOM_API_KEY`).
 7. Check `https://$DOMAIN/up` answers 200 and `/admin` asks for a login.
 
