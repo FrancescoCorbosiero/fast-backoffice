@@ -31,7 +31,7 @@ it('parses decimal strings exactly, with a dot or a comma', function (string $in
 
 it('refuses amounts with more than two decimals or that are not numbers', function (string $input): void {
     expect(fn () => Money::fromDecimal($input))->toThrow(InvalidArgumentException::class);
-})->with(['1.234', 'abc', '1,234.56', '', '1e3']);
+})->with(['1.234', 'abc', '1,2,3', '', '1e3']);
 
 it('adds and subtracts in the same currency only', function (): void {
     $a = new Money(1_000);
@@ -82,4 +82,13 @@ it('renders negative amounts with the sign in front', function (): void {
 
 it('formats for Italian readers', function (): void {
     expect((new Money(123_456))->format())->toContain('1.234,56')->toContain('€');
+});
+
+it('reads amounts the way people type them, thousands separator included', function (): void {
+    expect(Money::fromDecimal('1.500,00')->cents)->toBe(150_000)
+        ->and(Money::fromDecimal('1,500.00')->cents)->toBe(150_000)
+        ->and(Money::fromDecimal('1500,5')->cents)->toBe(150_050)
+        ->and(Money::fromDecimal('12.34')->cents)->toBe(1_234)
+        ->and(Money::fromDecimal('12,34')->cents)->toBe(1_234)
+        ->and(fn () => Money::fromDecimal('1.2.3'))->toThrow(InvalidArgumentException::class);
 });

@@ -20,6 +20,7 @@ return [
         1 => ['Contacts'],
         2 => ['Catalog', 'Cash', 'Invoicing', 'Quotes'],
         3 => ['Websites', 'Domains', 'Repositories'],
+        4 => ['Leads'],
     ],
 
     /*

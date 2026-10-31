@@ -46,6 +46,7 @@ class AdminPanelProvider extends PanelProvider
                 'Fatturazione',
                 'Cassa',
                 'Asset',
+                'Crescita',
                 'Impostazioni',
                 'Sistema',
             ])

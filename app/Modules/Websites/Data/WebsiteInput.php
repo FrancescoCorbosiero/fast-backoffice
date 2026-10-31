@@ -48,7 +48,7 @@ final readonly class WebsiteInput
             hostingStartedOn: $started === null ? null : CarbonImmutable::parse($started)->startOfDay(),
             hostingRenewsOn: $renews === null ? null : CarbonImmutable::parse($renews)->startOfDay(),
             hostingFrequency: $frequency === null ? null : Frequency::tryFrom($frequency),
-            hostingCost: $cost === null || trim($cost) === '' ? null : Money::fromDecimal(str_replace(',', '.', trim($cost)), $currency),
+            hostingCost: $cost === null || trim($cost) === '' ? null : Money::fromDecimal($cost, $currency),
             hostingAccountId: Shape::int($data, 'hosting_account_id', 0) > 0 ? Shape::int($data, 'hosting_account_id') : null,
             hostingCategoryId: Shape::int($data, 'hosting_category_id', 0) > 0 ? Shape::int($data, 'hosting_category_id') : null,
             uptimeEnabled: Shape::bool($data, 'uptime_enabled', true),

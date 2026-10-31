@@ -39,7 +39,15 @@ final readonly class Money implements Stringable
      */
     public static function fromDecimal(string $amount, string $currency = 'EUR'): self
     {
-        $normalised = str_replace(',', '.', trim($amount));
+        $trimmed = trim($amount);
+
+        // "1.500,00" and "1,500.00": with both separators present, the last one is the decimal point.
+        if (str_contains($trimmed, '.') && str_contains($trimmed, ',')) {
+            $decimalSeparator = strrpos($trimmed, ',') > strrpos($trimmed, '.') ? ',' : '.';
+            $trimmed = str_replace($decimalSeparator === ',' ? '.' : ',', '', $trimmed);
+        }
+
+        $normalised = str_replace(',', '.', $trimmed);
 
         if (preg_match('/^(-?)(\d+)(?:\.(\d{1,2}))?$/', $normalised, $parts) !== 1) {
             throw new InvalidArgumentException("\"{$amount}\" is not a decimal amount with at most two decimals.");

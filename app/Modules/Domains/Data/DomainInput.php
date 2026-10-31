@@ -44,7 +44,7 @@ final readonly class DomainInput
             registeredOn: $registered === null ? null : CarbonImmutable::parse($registered)->startOfDay(),
             renewalMonths: max(1, Shape::int($data, 'renewal_months', 12)),
             autoRenew: Shape::bool($data, 'auto_renew', true),
-            renewalCost: $cost === null || trim($cost) === '' ? null : Money::fromDecimal(str_replace(',', '.', trim($cost)), $currency),
+            renewalCost: $cost === null || trim($cost) === '' ? null : Money::fromDecimal($cost, $currency),
             accountId: Shape::int($data, 'account_id', 0) > 0 ? Shape::int($data, 'account_id') : null,
             categoryId: Shape::int($data, 'category_id', 0) > 0 ? Shape::int($data, 'category_id') : null,
             notes: Shape::nullableString($data, 'notes'),

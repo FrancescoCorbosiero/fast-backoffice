@@ -21,6 +21,7 @@ return [
     App\Modules\Websites\WebsitesServiceProvider::class,
     App\Modules\Domains\DomainsServiceProvider::class,
     App\Modules\Repositories\RepositoriesServiceProvider::class,
+    App\Modules\Leads\LeadsServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\HorizonServiceProvider::class,
 ];
