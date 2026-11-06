@@ -41,6 +41,10 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="PIPELINE_QUEUE_CONNECTION" value="sync"/>
+        <env name="PIPELINE_WORKSPACE_ROOT" value="storage/framework/testing/pipeline/workspace"/>
+        <env name="PIPELINE_PREVIEW_ROOT" value="storage/framework/testing/pipeline/previews"/>
+        <env name="PIPELINE_PREVIEW_DOMAIN" value="preview.example.test"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

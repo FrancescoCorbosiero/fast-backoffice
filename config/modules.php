@@ -21,6 +21,7 @@ return [
         2 => ['Catalog', 'Cash', 'Invoicing', 'Quotes'],
         3 => ['Websites', 'Domains', 'Repositories'],
         4 => ['Leads', 'Calendar', 'Mail'],
+        5 => ['Pipeline'],
     ],
 
     /*
