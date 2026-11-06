@@ -23,6 +23,24 @@ final readonly class Repositories
     }
 
     /**
+     * @param  list<int>  $ids
+     * @return array<int, RepositoryData> keyed by id
+     */
+    public function byIds(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $repositories = [];
+        foreach (Repository::query()->whereIn('id', $ids)->get() as $repository) {
+            $repositories[$repository->id] = $repository->toData();
+        }
+
+        return $repositories;
+    }
+
+    /**
      * @return list<RepositoryData>
      */
     public function forWebsite(int $websiteId): array

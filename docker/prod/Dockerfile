@@ -1,10 +1,13 @@
-# Production images (design.md §7): one build, two targets.
+# Production images (design.md §7): one build, three targets.
 #
 #   docker build --target app -t fast-backoffice/app:latest -f docker/prod/Dockerfile .
+#   docker build --target worker -t fast-backoffice/worker:latest -f docker/prod/Dockerfile .
 #   docker build --target web -t fast-backoffice/web:latest -f docker/prod/Dockerfile .
 #
 # "app" is PHP-FPM with the application and its production dependencies;
 # the same image runs Horizon and the scheduler with another command.
+# "worker" is "app" plus git, Node and the Claude Code CLI: the pipeline
+# worker (docs/pipeline.md §3), the only consumer of the pipeline queue.
 # "web" is Caddy with the public directory (Filament's published assets
 # included), talking to app over FastCGI. Nothing from require-dev is
 # installed, no .env is baked in: configuration comes from the environment.
@@ -48,7 +51,25 @@ EXPOSE 9000
 ENTRYPOINT ["entrypoint"]
 CMD ["php-fpm"]
 
-# --- 3. Caddy with the public directory -------------------------------------
+# --- 3. The pipeline worker: git, Node, the Claude Code CLI -----------------
+FROM app AS worker
+
+USER root
+
+# git and ssh for the clients' repositories, Node for static-site builds and
+# the CLI, a writable home for the CLI's own files. Add Hugo or other
+# generators here as the sites need them.
+RUN apk add --no-cache git openssh-client nodejs npm \
+    && npm install -g @anthropic-ai/claude-code \
+    && npm cache clean --force \
+    && mkdir -p /home/www-data /var/www/html/storage/app/pipeline /var/www/html/storage/app/previews \
+    && chown -R www-data:www-data /home/www-data /var/www/html/storage/app
+
+ENV HOME=/home/www-data
+USER www-data
+CMD ["php", "artisan", "queue:work", "redis-pipeline", "--queue=pipeline", "--timeout=3900", "--sleep=3"]
+
+# --- 4. Caddy with the public directory -------------------------------------
 FROM caddy:2-alpine AS web
 
 COPY docker/prod/Caddyfile /etc/caddy/Caddyfile

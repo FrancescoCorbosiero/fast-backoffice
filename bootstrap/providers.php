@@ -24,6 +24,7 @@ return [
     App\Modules\Leads\LeadsServiceProvider::class,
     App\Modules\Calendar\CalendarServiceProvider::class,
     App\Modules\Mail\MailServiceProvider::class,
+    App\Modules\Pipeline\PipelineServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\HorizonServiceProvider::class,
 ];

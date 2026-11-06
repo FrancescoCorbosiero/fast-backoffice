@@ -75,6 +75,17 @@ return [
             'after_commit' => false,
         ],
 
+        // The pipeline's queue (config/pipeline.php): long jobs, so a long
+        // retry_after, and consumed only by the pipeline worker.
+        'redis-pipeline' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => env('PIPELINE_QUEUE', 'pipeline'),
+            'retry_after' => (int) env('PIPELINE_QUEUE_RETRY_AFTER', 4000),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

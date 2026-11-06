@@ -1,0 +1,14 @@
+{
+    "name": "Area clienti",
+    "short_name": "Area clienti",
+    "description": "Chiedi modifiche al tuo sito e approva le anteprime.",
+    "lang": "it",
+    "start_url": "/area-clienti/",
+    "scope": "/area-clienti/",
+    "display": "standalone",
+    "background_color": "#f4f4f5",
+    "theme_color": "#18181b",
+    "icons": [
+        { "src": "/portal/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ]
+}

@@ -44,6 +44,13 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // The client portal (design.md §4.2, Pipeline): clients sign in with
+        // an e-mailed link; the provider resolves them from Contacts.
+        'portal' => [
+            'driver' => 'session',
+            'provider' => 'clients',
+        ],
     ],
 
     /*
@@ -67,6 +74,10 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', User::class),
+        ],
+
+        'clients' => [
+            'driver' => 'pipeline-clients',
         ],
 
         // 'users' => [
