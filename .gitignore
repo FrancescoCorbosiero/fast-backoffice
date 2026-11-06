@@ -13,6 +13,7 @@
 /.vscode
 /.zed
 /auth.json
+/docker/secrets
 /public/css/filament
 /public/fonts/filament
 /public/js/filament

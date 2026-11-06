@@ -6,7 +6,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 
 1. `docs/roadmap.md` — the current phase and what's left. Work on the first phase that isn't done; tick boxes as you finish them.
 2. `docs/design.md` — principles (§2), modules and their rules (§4), core models (§5). Every change must fit them. If a rule genuinely fights a feature, change the design doc in the same change, with the reason.
-3. `docs/sdi.md` — before touching anything that creates, sends or receives a fiscal document.
+3. `docs/sdi.md` — before touching anything that creates, sends or receives a fiscal document; `docs/pipeline.md` — before touching the delivery pipeline (runner, jobs, portal).
 4. `docs/lessons-from-hive-crm.md` — the bug classes this project exists to avoid, and the hive-crm tests to port as specifications.
 5. `docs/runbook.md` — how production runs: deploy, backups, restore drill, secrets.
 
@@ -38,6 +38,8 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | Rebuild cached paid amounts | `php artisan invoicing:rebuild-paid` |
 | Start scheduled campaigns / reconcile campaigns / sync Cal.com now | `php artisan scheduling:run mail.start-scheduled` · `mail.reconcile` · `calendar.sync` |
 | Check every monitored website now | `php artisan scheduling:run websites.uptime-check` |
+| Re-dispatch approved change requests whose deploy never ran | `php artisan scheduling:run pipeline.deploy-approved` |
+| Pipeline worker (production only; the only consumer of the pipeline queue; attempts are set by the job class) | `php artisan queue:work redis-pipeline --queue=pipeline --timeout=3900` |
 | Read the PEC mailbox now / send issued invoices now | `php artisan scheduling:run invoicing.pec-inbox` · `php artisan scheduling:run invoicing.sdi-send` |
 | PEC round-trip test against a local mail server | `PEC_TEST_HOST=127.0.0.1 vendor/bin/pest tests/Feature/Invoicing/PecMailboxIntegrationTest.php` (GreenMail on 3025/3143; CI does this) |
 | Serve locally | `php artisan serve` (then `/admin`) |
@@ -46,7 +48,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 
 Tests run on PostgreSQL: `phpunit.xml` points at `fast_backoffice_test` on `127.0.0.1` with user and password `fast` (CI overrides these with its service container; `docker/pgsql/create-test-database.sql` creates it in Docker). The Docker images run PHP 8.4; `composer.lock` is resolved for PHP 8.3 so it installs on both.
 
-Where things go: `app/Kernel` (money, VAT, numbering, dates, `Reference`), `app/Modules/{Module}` (see design.md §4.3), `app/Support` (shared infrastructure: the module provider base class, `Shape` for typed reads from arrays), `app/Providers/Filament/AdminPanelProvider.php` (the panel; modules contribute through plugins tagged by their providers). A new module: folder under `app/Modules`, provider extending `App\Support\ModuleServiceProvider`, entry in `config/modules.php` and in `bootstrap/providers.php` in layer order; `tests/Arch` checks all of it.
+Where things go: `app/Kernel` (money, VAT, numbering, dates, `Reference`), `app/Modules/{Module}` (see design.md §4.3; `Pipeline` also has `Http/` for the portal, `Auth/`, `Policies/`, `Support/`), `app/Support` (shared infrastructure: the module provider base class, `Shape` for typed reads from arrays), `app/Providers/Filament/AdminPanelProvider.php` (the panel; modules contribute through plugins tagged by their providers). A new module: folder under `app/Modules`, provider extending `App\Support\ModuleServiceProvider`, entry in `config/modules.php` and in `bootstrap/providers.php` in layer order; `tests/Arch` checks all of it.
 
 ## Reference: hive-crm
 

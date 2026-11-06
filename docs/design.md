@@ -10,7 +10,8 @@ A back office for a one-person Italian web studio, used only by its owner:
 - **quotes** and **invoices**: Italian electronic invoices (FatturaPA) sent to and received from SdI over PEC — see [sdi.md](sdi.md);
 - **cash**: every euro in and out, expenses, recurring costs, and the cash-flow outlook;
 - **the assets the studio runs for clients**: websites, domain names, code repositories, and their renewals;
-- **growth**: leads, bookings (Cal.com) and email campaigns.
+- **growth**: leads, bookings (Cal.com) and email campaigns;
+- **the delivery pipeline**: a client asks for a change on their website in plain words, an agent makes it on a branch, the preview is approved, the change is deployed — see [pipeline.md](pipeline.md).
 
 It is a ground-up redesign of [hive-crm](https://github.com/FrancescoCorbosiero/hive-crm). That codebase is the reference: its behaviour defines what this one must do, and its bugs shaped the rules below ([lessons-from-hive-crm.md](lessons-from-hive-crm.md)). Its code is not copied.
 
@@ -57,6 +58,7 @@ These are the current stable majors (October 2026); `composer.lock` pins exact v
 ### 4.1 Layers
 
 ```
+5  Delivery         Pipeline
 4  Growth           Leads · Calendar · Mail
 3  Managed assets   Websites · Domains · Repositories
 2  Billing core     Catalog · Cash · Invoicing · Quotes
@@ -100,6 +102,8 @@ The order inside layer 2 follows the money: a payment is a cash movement, so Inv
 
 **Calendar** (4). Cal.com bookings from signed webhooks (`X-Cal-Signature-256`, HMAC of the raw body; each delivery handled once, keyed by the body's hash) plus an hourly sync through the API, one booking per Cal.com uid whatever the channel, linked to contacts by the attendee's email. Read-only here: Cal.com is where bookings change.
 
+**Pipeline** (5). The delivery pipeline (not Leads' *sales* pipeline): a website gets a pipeline when one of its repositories (Repositories) is linked to it; an onboarding run audits the repository and writes `pipeline.yml` and `CLAUDE.md`, which the owner approves. A client's change request (from the portal `/area-clienti/`, or the owner on their behalf) is run by the Claude Code CLI headless on a branch of the repository by a queued job on a dedicated worker, gated on the paths it touched, built, previewed at a random slug, and waits for the owner's or the client's decision; approval fast-forwards the default branch, pushes and deploys. Approve and reject only change state: every git, CLI and build call runs in the worker, through argv, with an allowlisted environment. Clients sign in with an e-mailed one-time link (no passwords), on their own guard, and see only their own requests. The owner is notified by the dashboard. [pipeline.md](pipeline.md).
+
 **Mail** (4). Campaigns through Amazon SES: audience from Contacts' `SearchContacts::mailable` (consent respected, frozen at start), one queued job per recipient through a rate limiter with a retry budget in time, "sent" only when every recipient is final, SES events through signed SNS messages (verified, one per SNS MessageId), a bounce policy (permanent bounce or complaint: suppress; temporary: count, suppress after repeated failures), and RFC 8058 one-click unsubscribe (POST only; GET shows a page). Sender, rate and thresholds are settings; keys are env.
 
 ### 4.3 Inside a module
@@ -118,10 +122,14 @@ app/Modules/{Module}/
     Models/                      Eloquent models
     Filament/                    resources, pages, widgets, and the module's panel plugin
     Integrations/                adapters to external systems (PEC, SES, Cal.com)
-    Jobs/                        recurring jobs (Scheduling's `ScheduledJob` contract)
+    Jobs/                        recurring jobs (Scheduling's `ScheduledJob` contract) and queued jobs
     Contributions/               implementations of lower modules' extension points
     Listeners/                   listeners for lower modules' events
     Console/                     artisan commands
+    Http/                        controllers for the module's public routes (webhooks, the client portal)
+    Auth/                        the module's own guard pieces (the portal's client user and provider)
+    Policies/                    authorization for the module's models
+    Support/                     the module's private helpers that aren't adapters (the pipeline runner, prompts)
     Database/                    migrations, factories, seeders
     {Module}ServiceProvider.php  migrations, bindings, the panel plugin and job tags
 ```
@@ -205,6 +213,13 @@ The layer table lives in `config/modules.php`; `tests/Arch` reads it. A module's
 - Logging a renewal is idempotent per (asset, period).
 - A website's subscription is a recurring invoice created through Invoicing; the website keeps the schedule's reference.
 
+### 5.6 Pipeline
+
+- A **website pipeline** links one website to one repository (from Repositories, which holds the URL and the default branch) with a kind (`static_site`) and a status: `none`, `onboarding`, `ready`. Only a `ready` website takes change requests.
+- A **change request** belongs to a client contact and a website, keeps snapshots of their names, and has a kind (`change`, `onboarding`), the client's text, a branch (`req/<id>`, `pipeline/onboarding`), a random preview slug, the preview URL, the run's log, the touched paths, the generated files (onboarding), the error, the decision (by owner or client, when, why), the deploy claim and the run's cost.
+- **Lifecycle**: `received → queued → running → preview_ready → approved → deployed`; `running → failed`, `preview_ready → rejected`, `approved → failed`. `rejected`, `deployed` and `failed` are terminal. Every write goes through the transition table, so a late or repeated job never moves a request backwards.
+- **Safety**: the request text is untrusted input; what a run may touch is decided by the manifest's editable paths and enforced on the diff after the run; the manifest and the build read from the default branch only; the default branch moves only by fast-forward, from the deploy actions; processes get an allowlisted environment; previews are keyed by the slug, never the id, and never follow symbolic links.
+
 ## 6. Quality bar
 
 - **CI on every push:** Pint in test mode, Larastan at max, Pest (Unit, Feature, Arch) on PostgreSQL 18 in a service container.
@@ -217,7 +232,7 @@ The layer table lives in `config/modules.php`; `tests/Arch` reads it. A module's
 
 ## 7. Operations
 
-- Docker images for the app, the queue worker (Horizon) and the scheduler; PostgreSQL; Redis; Caddy for TLS.
+- Docker images for the app, the queue worker (Horizon), the scheduler and the pipeline worker (git, Node, the Claude Code CLI; the only consumer of the pipeline queue); PostgreSQL; Redis; Caddy for TLS.
 - Secrets — PEC password, SES keys, app key — live only in the server's environment, never in the database or the repository.
 - One owner account, created with `php artisan owner:create` (no default user, no seeded password), with optional two-factor authentication (TOTP with recovery codes, enabled from the profile page; secrets stored encrypted). Issuing, sending and voiding fiscal documents are recorded in the audit trail (the Audit module).
 - Nightly backups of the database and files to S3-compatible storage, with a restore drill in the runbook. Legal archiving of invoices is separate — see [sdi.md §8](sdi.md#8-archiving-conservazione).

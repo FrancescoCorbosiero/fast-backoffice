@@ -1,6 +1,8 @@
 # Production (design.md §7, docs/runbook.md): Caddy in front, PHP-FPM behind,
-# Horizon for the queue, the scheduler, PostgreSQL 18, Redis, and a nightly
-# backup to S3-compatible storage. Configuration comes from .env.production.
+# Horizon for the queue, the scheduler, the pipeline worker (the only consumer
+# of the pipeline queue: git, Node and the Claude Code CLI), PostgreSQL 18,
+# Redis, and a nightly backup to S3-compatible storage. Configuration comes
+# from .env.production.
 #
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 
@@ -68,6 +70,59 @@ services:
     <<: *app
     command: php artisan schedule:work
 
+  # The pipeline worker (docs/pipeline.md §3). Not the x-app anchor on purpose:
+  # it gets only what it needs, never the PEC, SES or S3 secrets. The deploy
+  # key for the clients' repositories is a file, mounted read-only.
+  pipeline-worker:
+    image: fast-backoffice/worker:latest
+    build:
+      context: .
+      dockerfile: docker/prod/Dockerfile
+      target: worker
+    environment:
+      APP_ENV: production
+      APP_KEY: ${APP_KEY:?}
+      APP_URL: https://${DOMAIN:?}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
+      APP_LOCALE: it
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_DATABASE: ${DB_DATABASE:-fast_backoffice}
+      DB_USERNAME: ${DB_USERNAME:?}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      FILES_DISK: ${FILES_DISK:-local}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
+      PIPELINE_CLAUDE_MODEL: ${PIPELINE_CLAUDE_MODEL:-}
+      PIPELINE_MAX_COST_USD: ${PIPELINE_MAX_COST_USD:-5}
+      PIPELINE_TIMEOUT_SECONDS: ${PIPELINE_TIMEOUT_SECONDS:-1800}
+      PIPELINE_BUILD_TIMEOUT_SECONDS: ${PIPELINE_BUILD_TIMEOUT_SECONDS:-900}
+      PIPELINE_PREVIEW_DOMAIN: ${PIPELINE_PREVIEW_DOMAIN:?}
+      PIPELINE_GIT_NAME: ${PIPELINE_GIT_NAME:-fast-backoffice pipeline}
+      PIPELINE_GIT_EMAIL: ${PIPELINE_GIT_EMAIL:?}
+      PIPELINE_GIT_SSH_COMMAND: ssh -i /run/secrets/pipeline_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
+    volumes:
+      - pipeline_workspace:/var/www/html/storage/app/pipeline
+      - previews:/var/www/html/storage/app/previews
+      - ./docker/secrets/pipeline_deploy_key:/run/secrets/pipeline_deploy_key:ro
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
   pgsql:
     image: postgres:18-alpine
     environment:
@@ -113,3 +168,5 @@ volumes:
   redis:
   caddy_data:
   caddy_config:
+  pipeline_workspace:
+  previews:
