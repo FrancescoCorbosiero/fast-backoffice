@@ -73,4 +73,5 @@ CMD ["php", "artisan", "queue:work", "redis-pipeline", "--queue=pipeline", "--ti
 FROM caddy:2-alpine AS web
 
 COPY docker/prod/Caddyfile /etc/caddy/Caddyfile
-COPY --from=app /var/www/html/public /srv/public
+# The same path as in the app image: FastCGI hands FPM the script's path as web sees it.
+COPY --from=app /var/www/html/public /var/www/html/public
