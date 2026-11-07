@@ -51,6 +51,12 @@ services:
 
   app:
     <<: *app
+    # A name no other stack on a shared network can claim: web talks to
+    # PHP-FPM through it (docker/prod/Caddyfile*), never through "app".
+    networks:
+      default:
+        aliases:
+          - fast-backoffice-fpm
     healthcheck:
       test: ['CMD-SHELL', 'php -r "exit(fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);"']
       interval: 10s
