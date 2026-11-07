@@ -45,11 +45,61 @@ it('audits the repository on the onboarding branch and shows the two generated f
         ->and(implode(' ', $this->fake->calls('claude')[0]['argv']))->not->toContain('--append-system-prompt-file');
 });
 
+it('proposes the default branch\'s valid pipeline.yml when the run makes no commits, and approving makes the site ready without pushing', function (): void {
+    Event::fake([PipelineReady::class]);
+    $this->fake->commitsAhead = 0;
+    $this->fake->touched = [];
+    $this->fake->claudeResult['result'] = 'pipeline.yml e CLAUDE.md ci sono già e sono corretti: non ho cambiato nulla.';
+
+    $request = onboard($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::PreviewReady)
+        ->and($request->error)->toBeNull()
+        ->and($request->generated_files)->toEqual(['pipeline.yml' => $this->fake->files['pipeline.yml'], 'CLAUDE.md' => $this->fake->files['CLAUDE.md']])
+        ->and($request->log)->toContain('Nessun commit')->toContain('percorsi modificabili: content, layouts')
+        ->and($this->fake->calls('git show origin/main:pipeline.yml'))->not->toBeEmpty()
+        ->and($this->fake->ran('git push'))->toBeFalse();
+
+    $this->fake->on('git ls-remote', FakeCommandRunner::fail('', 2));
+    $request->update(['status' => ChangeRequestStatus::Approved]);
+    (new MergeOnboarding($request->id))->handle(app(Merge::class));
+
+    expect($request->refresh()->status)->toBe(ChangeRequestStatus::Deployed)
+        ->and($this->site['pipeline']->refresh()->status)->toBe(PipelineStatus::Ready)
+        ->and($request->log)->toContain('Niente da unire')
+        ->and($this->fake->ran('git push'))->toBeFalse()
+        ->and($this->fake->ran('git merge'))->toBeFalse()
+        ->and($this->fake->ran('git fetch -- origin pipeline/onboarding'))->toBeFalse();
+    Event::assertDispatched(PipelineReady::class, fn (PipelineReady $e): bool => $e->websiteId === $this->site['website']->id);
+});
+
+it('fails as before when the run makes no commits and the default branch has no valid pipeline.yml', function (): void {
+    $this->fake->commitsAhead = 0;
+    $this->fake->touched = [];
+    unset($this->fake->files['pipeline.yml']);
+
+    $request = onboard($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::Failed)
+        ->and($request->error)->toBe('Sito Hugo, contenuti in content/, layout in layouts/.')
+        ->and($this->site['pipeline']->refresh()->status)->toBe(PipelineStatus::Onboarding)
+        ->and($this->fake->ran('git push'))->toBeFalse();
+
+    $this->fake->files['pipeline.yml'] = "build: npm run build\noutput_dir: dist\neditable_paths:\n  - .github\n";
+    $invalid = ChangeRequest::factory()->onboarding()->status(ChangeRequestStatus::Queued)->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id]);
+    $invalid = onboard($invalid);
+    expect($invalid->status)->toBe(ChangeRequestStatus::Failed)
+        ->and($invalid->error)->toContain('Sito Hugo')->toContain('non è valido');
+});
+
 it('fails when the run leaves no commits, writes other files, misses a file, or writes an invalid manifest', function (): void {
     $this->fake->commitsAhead = 0;
+    $manifest = $this->fake->files['pipeline.yml'];
+    unset($this->fake->files['pipeline.yml']);
     expect(onboard($this->request)->error)->toBe('Sito Hugo, contenuti in content/, layout in layouts/.');
 
     $this->fake->commitsAhead = 1;
+    $this->fake->files['pipeline.yml'] = $manifest;
     $other = ChangeRequest::factory()->onboarding()->status(ChangeRequestStatus::Queued)->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id]);
     $this->fake->touched = ['pipeline.yml', 'CLAUDE.md', 'content/home.md'];
     expect(onboard($other)->error)->toContain('content/home.md');

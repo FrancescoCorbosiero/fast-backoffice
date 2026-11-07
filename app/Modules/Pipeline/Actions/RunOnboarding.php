@@ -11,6 +11,7 @@ use App\Modules\Pipeline\Events\ChangeRequestStarted;
 use App\Modules\Pipeline\Events\PreviewReady;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Queries\WebsitePipelines;
+use App\Modules\Pipeline\Support\ManifestException;
 use App\Modules\Pipeline\Support\ManifestReader;
 use App\Modules\Pipeline\Support\PathPolicy;
 use App\Modules\Pipeline\Support\PipelineRunner;
@@ -25,7 +26,9 @@ use Throwable;
 /**
  * The body of OnboardRepository: the audit run on pipeline/onboarding,
  * which must leave exactly pipeline.yml (valid) and CLAUDE.md, pushed for
- * the owner to read and approve.
+ * the owner to read and approve. A run with no commits on a repository
+ * whose default branch already has a valid pipeline.yml shows those
+ * files instead, and pushes nothing.
  */
 final readonly class RunOnboarding
 {
@@ -90,22 +93,26 @@ final readonly class RunOnboarding
         if ($outcome->wasRefused()) {
             throw new RuntimeException('L\'onboarding ha toccato file che non doveva: '.implode(', ', $outcome->refusedPaths));
         }
-        if (! $outcome->hasCommits) {
-            throw new RuntimeException($outcome->resultText !== '' ? $outcome->resultText : 'L\'onboarding non ha prodotto commit.');
-        }
-
-        $files = [];
-        foreach (PathPolicy::PROTECTED as $path) {
-            $content = $this->runner->show($dir, $request->branch, $path);
-            if ($content === null || trim($content) === '') {
-                throw new RuntimeException("L'onboarding non ha scritto {$path}.");
+        $default = $repository->defaultBranch;
+        if ($outcome->hasCommits) {
+            $files = [];
+            foreach (PathPolicy::PROTECTED as $path) {
+                $content = $this->runner->show($dir, $request->branch, $path);
+                if ($content === null || trim($content) === '') {
+                    throw new RuntimeException("L'onboarding non ha scritto {$path}.");
+                }
+                $files[$path] = $content;
             }
-            $files[$path] = $content;
+        } else {
+            $files = $this->alreadyOnboarded($dir, $default, $outcome->resultText);
+            $request->appendLog("\nNessun commit: {$default} ha già un pipeline.yml valido, che viene proposto così com'è. Nessun branch è stato pubblicato.");
         }
         $manifest = $this->manifests->read($files[ManifestReader::FILE]);
         $request->appendLog("\npipeline.yml: build \"{$manifest->build}\", output \"{$manifest->outputDir}\", percorsi modificabili: ".implode(', ', $manifest->editablePaths).($manifest->deploy === null ? '' : ", deploy \"{$manifest->deploy}\"."));
 
-        $this->runner->push($dir, $request->branch, $repository->defaultBranch);
+        if ($outcome->hasCommits) {
+            $this->runner->push($dir, $request->branch, $default);
+        }
 
         $data = $this->db->transaction(function () use ($request, $files): ChangeRequestData {
             $request->refresh();
@@ -117,5 +124,35 @@ final readonly class RunOnboarding
         $this->events->dispatch(new PreviewReady($data->id, $data->websiteId, $data->contactId, null));
 
         return $data;
+    }
+
+    /**
+     * A run that changed nothing is fine when the default branch already
+     * carries a valid pipeline.yml: those files (and CLAUDE.md, when there
+     * is one) are what the owner approves. Otherwise it fails as before,
+     * with the agent's explanation.
+     *
+     * @return array<string, string>
+     */
+    private function alreadyOnboarded(string $dir, string $default, string $resultText): array
+    {
+        $reason = $resultText !== '' ? $resultText : 'L\'onboarding non ha prodotto commit.';
+        $manifest = $this->runner->show($dir, 'origin/'.$default, ManifestReader::FILE);
+        if ($manifest === null || trim($manifest) === '') {
+            throw new RuntimeException($reason);
+        }
+        try {
+            $this->manifests->read($manifest);
+        } catch (ManifestException $exception) {
+            throw new RuntimeException($reason."\n\nIl pipeline.yml su {$default} non è valido: ".$exception->getMessage());
+        }
+
+        $files = [ManifestReader::FILE => $manifest];
+        $claude = $this->runner->show($dir, 'origin/'.$default, 'CLAUDE.md');
+        if ($claude !== null && trim($claude) !== '') {
+            $files['CLAUDE.md'] = $claude;
+        }
+
+        return $files;
     }
 }

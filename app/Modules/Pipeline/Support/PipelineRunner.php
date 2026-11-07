@@ -143,7 +143,7 @@ final readonly class PipelineRunner
 
         $touched = $this->touched($dir, 'origin/'.$defaultBranch, 'HEAD', includeWorkingTree: true);
         $refused = $policy->refused($touched);
-        $commits = (int) trim($this->gitOrFail($dir, ['rev-list', '--count', 'origin/'.$defaultBranch.'..HEAD'])->stdout);
+        $commits = $this->commitsAhead($dir, 'origin/'.$defaultBranch, 'HEAD');
 
         $log = [];
         $log[] = $cli->timedOut ? 'Tempo scaduto: la run è stata interrotta.' : ($cli->succeeded ? 'Run completata.' : 'La run ha segnalato un errore.');
@@ -190,6 +190,31 @@ final readonly class PipelineRunner
         }
 
         return array_values(array_unique($paths));
+    }
+
+    /**
+     * How many commits $to has that $from doesn't.
+     */
+    public function commitsAhead(string $dir, string $from, string $to): int
+    {
+        return (int) trim($this->gitOrFail($dir, ['rev-list', '--count', $from.'..'.$to])->stdout);
+    }
+
+    /**
+     * Whether origin has the branch (exit code 2 from ls-remote means it doesn't).
+     */
+    public function remoteBranchExists(string $dir, string $branch): bool
+    {
+        BranchName::assert($branch);
+        $result = $this->git($dir, ['ls-remote', '--exit-code', '--heads', '--', 'origin', 'refs/heads/'.$branch], network: true);
+        if ($result->exitCode === 2) {
+            return false;
+        }
+        if (! $result->succeeded()) {
+            throw new RuntimeException('git ls-remote fallito: '.mb_substr($result->output(), -2000));
+        }
+
+        return true;
     }
 
     public function show(string $dir, string $ref, string $path): ?string

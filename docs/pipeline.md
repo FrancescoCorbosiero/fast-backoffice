@@ -21,6 +21,8 @@ received → queued ──RunStaticSiteRequest──▶ running ──▶ previe
 
 **Onboarding** is the same machinery with `kind = onboarding`: linking a repository to a website (Asset › Pipeline siti) creates an onboarding request on `pipeline/onboarding`. The CLI audits the repository and writes exactly `pipeline.yml` and `CLAUDE.md` (§4); both are shown on the request for the owner to read. Approving runs `MergeOnboarding`: fast-forward onto the default branch, push, and the website's pipeline becomes `ready`. Rejecting leaves it `none`.
 
+A repository that already has a valid `pipeline.yml` on its default branch (onboarded before, or written by hand) usually gets a run with no commits. That is not a failure: when `ManifestReader` accepts `pipeline.yml` from `origin/<default>`, the request shows it (and `CLAUDE.md`, when there is one) as the generated files and goes to `preview_ready`, with no branch pushed. On approval `MergeOnboarding` sees that the onboarding branch has nothing beyond the default branch (it isn't on the remote, or has no commits of its own), still runs the path gate and reads the manifest, skips the fast-forward and the push, and only makes the pipeline `ready` (`deployed`, `PipelineReady`). A run with no commits and no valid `pipeline.yml` on the default branch fails as before, with the agent's explanation (and the manifest's error, when there is an invalid one).
+
 Every transition writes an audit entry (`pipeline.change_request.<status>`) and dispatches an event (`Events\`). The owner's notification channel is the dashboard: **Anteprime da approvare**, **In pubblicazione**, **Fallite negli ultimi 30 giorni**.
 
 ## 2. Configuration (`config/pipeline.php`)
