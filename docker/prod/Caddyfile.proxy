@@ -1,0 +1,31 @@
+# Caddy behind an external reverse proxy that terminates TLS (runbook §2b:
+# caddy-docker-proxy on the "caddy" network). Plain HTTP on :80, no
+# certificates here; the proxy forwards the host and X-Forwarded-* headers.
+{
+    auto_https off
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+:80 {
+    root * /srv/public
+    encode zstd gzip
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    php_fastcgi app:9000 {
+        resolve_root_symlink
+    }
+    file_server
+
+    log {
+        output stdout
+        format json
+    }
+}

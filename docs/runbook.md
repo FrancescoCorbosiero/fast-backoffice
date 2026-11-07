@@ -40,6 +40,16 @@ docker compose -f docker-compose.prod.yml exec app php artisan owner:create you@
 7. The pipeline worker (docs/pipeline.md §3): `ANTHROPIC_API_KEY` and `PIPELINE_*` in `.env.production`; a deploy key for the clients' repositories at `docker/secrets/pipeline_deploy_key` (owned by the container's `www-data`, uid 82: `chown 82 docker/secrets/pipeline_deploy_key && chmod 0400 …`; mounted read-only into `pipeline-worker`, named by `PIPELINE_GIT_SSH_COMMAND`; the worker's user must be able to read it, and the build commands run as that same user: docs/pipeline.md §3); the `worker` image built with the others. On every client repository, **protect the default branch on the remote**: no force-push, no deletion, and, where the provider allows it, let the pipeline's credential push only `req/*` and `pipeline/*` (GitHub rulesets or GitLab protected branches with a key restricted to those patterns). The runner never pushes the default branch except by fast-forward from the deploy actions; this is the second net behind that rule. Previews need the wildcard vhost of docs/pipeline.md §5 (not part of the images yet).
 8. Check `https://$DOMAIN/up` answers 200, `/admin` asks for a login and `/area-clienti/` shows the sign-in form.
 
+### 2b. Behind an existing caddy-docker-proxy
+
+When the VPS already runs [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy) on ports 80/443 with the `caddy` network, `web` must not bind those ports: add the overlay to every compose command.
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.proxy.yml --env-file .env.production up -d --build
+```
+
+The overlay (`docker-compose.proxy.yml`) removes `web`'s ports, puts it on the `caddy` network, mounts `docker/prod/Caddyfile.proxy` (plain HTTP on :80, `auto_https off`, the proxy's addresses trusted for `X-Forwarded-*`) and sets the labels `caddy: $DOMAIN` and `caddy.reverse_proxy: {{upstreams 80}}`; the proxy gets the certificate. `ACME_EMAIL` is unused in this mode. The preview vhost (docs/pipeline.md §5) will plug in the same way: a second host label on `web` for `*.$PIPELINE_PREVIEW_DOMAIN`, with the `previews` volume mounted and a wildcard certificate configured on the proxy.
+
 ## 3. Deploy a new version
 
 ```bash
