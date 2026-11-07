@@ -13,6 +13,7 @@ use App\Modules\Quotes\Actions\AcceptQuote;
 use App\Modules\Quotes\Actions\CreateQuote;
 use App\Modules\Quotes\Actions\DeclineQuote;
 use App\Modules\Quotes\Actions\DeleteQuote;
+use App\Modules\Quotes\Actions\ExtendQuoteValidity;
 use App\Modules\Quotes\Actions\MarkQuoteSent;
 use App\Modules\Quotes\Actions\RenderQuotePdf;
 use App\Modules\Quotes\Actions\UpdateQuote;
@@ -191,7 +192,23 @@ it('accepted, becomes a payment request dated on the acceptance', function (): v
         ->and($request->issuedOn->toDateString())->toBe('2026-03-18')
         ->and($request->total->cents)->toBe(50_000)
         ->and($request->contactId)->toBe($client->id)
+        ->and($request->notes)->toBe('Rif. Preventivo PRV 1/2026')
         ->and(Invoice::query()->count())->toBe(0);
+});
+
+it('holds for longer without going back to draft', function (): void {
+    $client = Studio::client();
+    $quote = quote($client->id, [Studio::line('x', '100.00')]);
+    $sent = app(MarkQuoteSent::class)->mark($quote->id, CarbonImmutable::parse('2026-03-16'));
+
+    $extended = app(ExtendQuoteValidity::class)->extend($quote->id, CarbonImmutable::parse('2026-05-31'));
+
+    expect($extended->status)->toBe(QuoteStatus::Sent)
+        ->and($extended->validUntil->toDateString())->toBe('2026-05-31')
+        ->and($extended->sentOn?->toDateString())->toBe('2026-03-16')
+        ->and($extended->pdfFileId)->toBe($sent->pdfFileId)
+        ->and(array_map(fn ($entry) => $entry->action, app(AuditTrail::class)->forSubject($extended->reference())))->toContain('quotes.quote.extended')
+        ->and(fn () => app(ExtendQuoteValidity::class)->extend($quote->id, CarbonImmutable::parse('2026-03-01')))->toThrow(ValidationException::class);
 });
 
 it('leaves nothing behind when Invoicing refuses the document', function (): void {

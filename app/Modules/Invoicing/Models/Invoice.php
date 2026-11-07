@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $contact_id
  * @property string $customer_name
  * @property ?int $related_invoice_id
+ * @property ?int $recurring_invoice_id
  * @property string $currency
  * @property list<array<string, mixed>> $lines
  * @property int $payment_terms_days
@@ -177,6 +178,7 @@ class Invoice extends Model
             sdiOutcomeAt: $this->sdi_outcome_at,
             sdiErrors: self::errorsFromJson($this->sdi_errors ?? []),
             rejectedAt: $this->rejected_at,
+            recurringInvoiceId: $this->recurring_invoice_id,
         );
     }
 

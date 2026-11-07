@@ -12,6 +12,11 @@ class EditAccount extends EditRecord
 {
     protected static string $resource = AccountResource::class;
 
+    protected function getHeaderActions(): array
+    {
+        return [AccountResource::statementAction()];
+    }
+
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $data['opening_balance'] = Amounts::decimal($data['opening_balance_cents'] ?? 0);

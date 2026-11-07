@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Mail\Filament\Resources\Campaigns;
 
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Queries\SearchContacts;
+use App\Modules\Mail\Actions\SaveCampaign;
 use App\Modules\Mail\Enums\CampaignStatus;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\CreateCampaign;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\EditCampaign;
@@ -12,10 +14,12 @@ use App\Modules\Mail\Filament\Resources\Campaigns\Pages\ListCampaigns;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\ViewCampaign;
 use App\Modules\Mail\Models\Campaign;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -24,6 +28,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
 use UnitEnum;
 
 class CampaignResource extends Resource
@@ -44,10 +49,13 @@ class CampaignResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        // Who can actually be reached, per role: the one decision on this form.
+        $contacts = app(SearchContacts::class);
         $roles = [];
         foreach (ContactRole::cases() as $role) {
-            $roles[$role->value] = $role->label();
+            $roles[$role->value] = $role->label().' ('.count($contacts->mailable([$role])).')';
         }
+        $total = count($contacts->mailable());
 
         return $schema->components([
             Section::make()->columns(2)->components([
@@ -55,7 +63,7 @@ class CampaignResource extends Resource
                 TextInput::make('subject')->label('Oggetto')->required()->maxLength(200),
                 TextInput::make('preheader')->label('Anteprima (preheader)')->maxLength(200)->columnSpanFull(),
                 CheckboxList::make('audience_roles')->label('Destinatari')->options($roles)->columns(4)->columnSpanFull()
-                    ->helperText('Nessuna spunta: tutti i contatti con email e consenso. Chi ha revocato il consenso o ha un indirizzo bloccato non riceve mai nulla.'),
+                    ->helperText('Tra parentesi quanti contatti con email e consenso ha ogni ruolo; in tutto sono '.$total.'. Nessuna spunta: tutti e '.$total.'. Chi ha revocato il consenso o ha un indirizzo bloccato non riceve mai nulla.'),
             ]),
             RichEditor::make('body_html')->label('Contenuto')->required()->columnSpanFull(),
         ]);
@@ -73,7 +81,15 @@ class CampaignResource extends Resource
                 TextColumn::make('recipients_count')->label('Destinatari')->counts('recipients')->alignEnd(),
             ])
             ->filters([SelectFilter::make('status')->label('Stato')->options(CampaignStatus::options())])
-            ->recordActions([ViewAction::make()])
+            ->recordActions([
+                ViewAction::make(),
+                Action::make('duplicate')->label('Duplica')->icon(Heroicon::OutlinedDocumentDuplicate)
+                    ->action(function (Campaign $record, Component $livewire): void {
+                        $copy = app(SaveCampaign::class)->duplicate($record->id);
+                        Notification::make()->title('Bozza creata da "'.$record->name.'"')->success()->send();
+                        $livewire->redirect(self::getUrl('edit', ['record' => $copy->id]));
+                    }),
+            ])
             ->paginated([25, 50]);
     }
 

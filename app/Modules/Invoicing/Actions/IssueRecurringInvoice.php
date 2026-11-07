@@ -8,6 +8,7 @@ use App\Modules\Audit\Actions\RecordAuditEntry;
 use App\Modules\Invoicing\Data\DraftInput;
 use App\Modules\Invoicing\Data\InvoiceData;
 use App\Modules\Invoicing\Events\RecurringInvoiceIssued;
+use App\Modules\Invoicing\Models\Invoice;
 use App\Modules\Invoicing\Models\RecurringInvoice;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\ConnectionInterface;
@@ -45,8 +46,13 @@ final readonly class IssueRecurringInvoice
             $notes = $schedule->name.' – '.$cycle->isoFormat('MMMM YYYY');
             $invoice = $this->drafts->create(new DraftInput($schedule->contact_id, $schedule->lineInputs(), $schedule->payment_terms_days, $notes));
 
+            // The draft remembers its schedule before it is issued: an issued document never changes.
+            Invoice::query()->whereKey($invoice->id)->update(['recurring_invoice_id' => $schedule->id]);
+
             if ($schedule->auto_issue) {
                 $invoice = $this->issue->issue($invoice->id, $cycle);
+            } else {
+                $invoice = Invoice::query()->findOrFail($invoice->id)->toData();
             }
 
             $schedule->forceFill([

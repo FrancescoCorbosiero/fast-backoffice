@@ -15,7 +15,6 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -36,6 +35,14 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->profile(isSimple: false)
+            ->brandName('fast')
+            // Livewire navigate: a page change swaps the content, the shell stays. External links open in a
+            // new tab (->url(..., true)) and downloads are actions that return a response, so neither is affected.
+            ->spa()
+            ->sidebarCollapsibleOnDesktop()
+            ->unsavedChangesAlerts()
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->globalSearchFieldKeyBindingSuffix()
             // Optional: the owner turns it on from their profile page when they want it.
             ->multiFactorAuthentication([
                 AppAuthentication::make()->recoverable(),
@@ -55,9 +62,10 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->widgets([
-                AccountWidget::class,
-            ])
+            // The dashboard is the owner's morning screen: only the modules' KPI widgets live on it. Filament's
+            // AccountWidget ("Bentornato" + sign-out) would add nothing for a single owner, whose profile and
+            // sign-out already sit in the user menu.
+            ->widgets([])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

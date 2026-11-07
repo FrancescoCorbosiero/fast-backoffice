@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Invoicing\Filament\Resources\PecMessages\Pages;
 
 use App\Modules\Files\Queries\ReadFile;
+use App\Modules\Invoicing\Actions\ProcessPecMessage;
 use App\Modules\Invoicing\Actions\ResolvePecMessage;
+use App\Modules\Invoicing\Enums\PecMessageKind;
 use App\Modules\Invoicing\Enums\PecMessageOutcome;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\PecMessages\PecMessageResource;
@@ -21,6 +23,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class ViewPecMessage extends ViewRecord
 {
@@ -63,8 +66,28 @@ class ViewPecMessage extends ViewRecord
 
                     return response()->streamDownload(fn () => print $contents, 'message-'.$this->message()->id.'.eml', ['Content-Type' => 'message/rfc822']);
                 }),
+            Action::make('reprocess')->label('Rielabora')->icon(Heroicon::OutlinedArrowPath)->color('warning')
+                ->visible(fn (): bool => $this->needsReview() && $this->message()->raw_file_id !== null)
+                ->requiresConfirmation()
+                ->modalDescription('Il messaggio conservato viene letto di nuovo, come se fosse appena arrivato: utile dopo aver sistemato la causa (profilo aziendale, fattura in uscita).')
+                ->action(function (): void {
+                    try {
+                        $result = app(ProcessPecMessage::class)->reprocess($this->message()->id);
+                    } catch (Throwable $exception) {
+                        Notification::make()->title('Rielaborazione non riuscita')->body($exception->getMessage())->danger()->persistent()->send();
+
+                        return;
+                    }
+
+                    $this->record = $this->message()->refresh();
+                    Notification::make()->title('Messaggio rielaborato: '.$result->outcome->label())->body($result->note ?? '')->status($result->outcome === PecMessageOutcome::Processed ? 'success' : 'warning')->send();
+                }),
+            Action::make('import')->label('Importa manualmente')->icon(Heroicon::OutlinedArrowUpTray)->color('gray')
+                ->visible(fn (): bool => $this->needsReview() && $this->message()->kind === PecMessageKind::SupplierInvoice)
+                ->tooltip('Scarica il messaggio, estrai il file XML e caricalo da «Importa XML» nelle fatture fornitori.')
+                ->url(SupplierInvoiceResource::getUrl('index')),
             Action::make('resolve')->label('Segna come gestito')->icon(Heroicon::OutlinedCheck)->color('success')
-                ->visible(fn (): bool => in_array($this->message()->outcome, [PecMessageOutcome::Review, PecMessageOutcome::Failed], true))
+                ->visible(fn (): bool => $this->needsReview())
                 ->schema([Textarea::make('note')->label('Cosa hai fatto')->rows(2)->maxLength(2000)])
                 ->action(function (array $data): void {
                     $note = $data['note'] ?? null;
@@ -73,6 +96,11 @@ class ViewPecMessage extends ViewRecord
                     Notification::make()->title('Messaggio gestito')->success()->send();
                 }),
         ];
+    }
+
+    private function needsReview(): bool
+    {
+        return in_array($this->message()->outcome, [PecMessageOutcome::Review, PecMessageOutcome::Failed], true);
     }
 
     private function message(): PecMessage

@@ -7,8 +7,10 @@ namespace App\Modules\Repositories;
 use App\Modules\Contacts\Contracts\ContactPanel;
 use App\Modules\Contacts\Events\ContactsMerged;
 use App\Modules\Repositories\Contributions\RepositoriesContactPanel;
+use App\Modules\Repositories\Contributions\RepositoriesWebsitePanel;
 use App\Modules\Repositories\Filament\RepositoriesPlugin;
 use App\Modules\Repositories\Listeners\RepointMergedContact;
+use App\Modules\Websites\Contracts\WebsitePanel;
 use App\Support\ModuleServiceProvider;
 use Illuminate\Support\Facades\Event;
 
@@ -29,6 +31,7 @@ class RepositoriesServiceProvider extends ModuleServiceProvider
         parent::register();
 
         $this->app->tag([RepositoriesContactPanel::class], ContactPanel::TAG);
+        $this->app->tag([RepositoriesWebsitePanel::class], WebsitePanel::TAG);
     }
 
     public function boot(): void

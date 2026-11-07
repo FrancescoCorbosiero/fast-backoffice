@@ -8,6 +8,7 @@ use App\Kernel\Money\Money;
 use App\Kernel\Money\Quantity;
 use App\Kernel\Money\VatRate;
 use App\Kernel\Vat\Natura;
+use App\Modules\Catalog\Filament\Components\ServicePicker;
 use App\Modules\Catalog\Queries\Services;
 use App\Modules\Invoicing\Data\LineInput;
 use Closure;
@@ -20,7 +21,8 @@ use Filament\Schemas\Components\Utilities\Set;
 use InvalidArgumentException;
 
 /**
- * The lines of a document, with a catalog picker that pre-fills a line.
+ * The lines of a document, with the catalog picker (Catalog's
+ * ServicePicker, which also adds a service inline) pre-filling a line.
  * The state keys are the ones LineInput::fromArray reads.
  */
 final class LinesSchema
@@ -39,7 +41,7 @@ final class LinesSchema
             ->columns(12)
             ->addActionLabel('Aggiungi riga')
             ->schema([
-                Select::make('service_id')->label('Dal listino')->options(fn (): array => app(Services::class)->options())->searchable()->dehydrated(false)->columnSpan(12)
+                ServicePicker::make('service_id')->dehydrated(false)->columnSpan(12)
                     ->afterStateUpdated(function (mixed $state, Set $set): void {
                         $service = is_numeric($state) ? app(Services::class)->find((int) $state) : null;
                         if ($service === null) {

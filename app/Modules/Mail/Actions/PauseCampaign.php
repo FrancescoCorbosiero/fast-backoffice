@@ -15,8 +15,8 @@ use LogicException;
 
 /**
  * Pause: queued jobs find the campaign paused and do nothing. Resume:
- * every recipient still queued gets a fresh job. Cancel: what is queued
- * is skipped for good.
+ * every recipient still queued gets a fresh job. Unschedule: a scheduled
+ * campaign is a draft again. Cancel: what is queued is skipped for good.
  */
 final readonly class PauseCampaign
 {
@@ -53,6 +53,22 @@ final readonly class PauseCampaign
         $this->complete->completeIfDone($campaign->id);
 
         return Campaign::query()->findOrFail($campaignId)->toData();
+    }
+
+    /**
+     * A scheduled campaign goes back to being a draft: nothing has gone
+     * out yet (recipients are frozen only at start), so nothing is lost.
+     */
+    public function unschedule(int $campaignId): CampaignData
+    {
+        $campaign = Campaign::query()->findOrFail($campaignId);
+        if ($campaign->status !== CampaignStatus::Scheduled) {
+            throw new LogicException("Campaign {$campaignId} is {$campaign->status->value}: only a scheduled campaign goes back to draft.");
+        }
+        $campaign->forceFill(['status' => CampaignStatus::Draft, 'scheduled_at' => null])->save();
+        $this->audit->record('mail.campaign.unscheduled', $campaign->toData()->reference());
+
+        return $campaign->toData();
     }
 
     public function cancel(int $campaignId): CampaignData

@@ -28,7 +28,7 @@ it('links a repository to a client and a site, reading the provider from the add
         ->and($repository->defaultBranch)->toBe('main')
         ->and(app(Repositories::class)->forWebsite($website->id))->toHaveCount(1)
         ->and(app(Repositories::class)->forContact($client->id)[0]->name)->toBe('bellavista-site')
-        ->and(RepositoryProvider::fromUrl('git@github.com:studio/x.git'))->toBe(RepositoryProvider::Other)
+        ->and(RepositoryProvider::fromUrl('git@github.com:studio/x.git'))->toBe(RepositoryProvider::GitHub)
         ->and(RepositoryProvider::fromUrl('https://bitbucket.org/studio/x'))->toBe(RepositoryProvider::Bitbucket);
 
     expect(fn () => app(SaveRepository::class)->create(RepositoryInput::fromArray(['name' => 'dup', 'url' => 'https://gitlab.com/studio/bellavista'])))->toThrow(ValidationException::class)

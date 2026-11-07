@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Invoicing\Filament\Resources\Invoices\Pages;
 
 use App\Modules\Cash\Queries\Accounts;
+use App\Modules\Contacts\Queries\FindContact;
 use App\Modules\Files\Queries\ReadFile;
 use App\Modules\Invoicing\Actions\CreateCreditNote;
 use App\Modules\Invoicing\Actions\ExportXml;
@@ -21,9 +22,12 @@ use App\Modules\Invoicing\Data\PaymentInput;
 use App\Modules\Invoicing\DocumentContext;
 use App\Modules\Invoicing\Enums\DocumentType;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
+use App\Modules\Invoicing\Enums\PaymentState;
 use App\Modules\Invoicing\Filament\Components\DocumentInfolist;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
+use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\RecurringInvoiceResource;
 use App\Modules\Invoicing\Models\Invoice;
+use App\Modules\Invoicing\Models\RecurringInvoice;
 use App\Modules\Invoicing\Queries\InvoicePayments;
 use App\Modules\Invoicing\Queries\SdiTransmissions;
 use App\Modules\Settings\Queries\GetSdiSettings;
@@ -88,14 +92,31 @@ class ViewInvoice extends ViewRecord
             $header[] = TextEntry::make('h_deadline')->label('Da inviare a SdI')->state($days < 0 ? 'in ritardo di '.abs($days).' giorni' : "entro {$days} giorni")->color($days < 3 ? 'danger' : 'warning');
         }
 
+        if ($invoice->status->canBeSent() && ! app(SendToSdi::class)->isAvailable()) {
+            // The settings page belongs to the Settings module: reached by its route, not its class.
+            $header[] = TextEntry::make('h_pec')->label('Invio via PEC')->state('non configurato: imposta la casella PEC')->color('warning')
+                ->url(route('filament.admin.pages.settings.sdi'));
+        }
+
         if ($invoice->related_invoice_id !== null) {
             $related = Invoice::query()->find($invoice->related_invoice_id);
             $header[] = TextEntry::make('h_related')->label('Storna')->state($related?->toData()->title() ?? '—')->url($related === null ? null : InvoiceResource::getUrl('view', ['record' => $related]));
         }
 
+        foreach ($this->creditNotes() as $note) {
+            $header[] = TextEntry::make('h_note'.$note->id)->label('Stornata da')->state($note->toData()->title().' · '.$note->status->label())
+                ->color($note->status->color())->url(InvoiceResource::getUrl('view', ['record' => $note]));
+        }
+
+        if ($invoice->recurring_invoice_id !== null) {
+            $schedule = RecurringInvoice::query()->find($invoice->recurring_invoice_id);
+            $header[] = TextEntry::make('h_recurring')->label('Fattura ricorrente')->state($schedule === null ? '—' : $schedule->name)
+                ->url($schedule === null ? null : RecurringInvoiceResource::getUrl('edit', ['record' => $schedule]));
+        }
+
         $components = [
             Section::make()->columns(count($header))->components($header),
-            ...DocumentInfolist::parties($data->seller, $data->customer),
+            ...DocumentInfolist::parties($data->seller, $data->customer, contactId: $invoice->contact_id),
             DocumentInfolist::lines($data->lines),
         ];
 
@@ -212,6 +233,14 @@ class ViewInvoice extends ViewRecord
                         return 'Segnata come inviata';
                     });
                 }),
+            Action::make('remind')
+                ->label('Sollecita')
+                ->icon(Heroicon::OutlinedEnvelope)
+                ->color('danger')
+                ->visible(fn (): bool => $this->invoice()->status->isOutstanding() && $this->invoice()->type === DocumentType::Invoice && $this->invoice()->toData()->paymentState(CarbonImmutable::today()) === PaymentState::Overdue)
+                ->disabled(fn (): bool => $this->customerEmail() === null)
+                ->tooltip(fn (): string => $this->customerEmail() === null ? 'Il cliente non ha un indirizzo email: aggiungilo sulla sua scheda.' : 'Apre una email di sollecito al cliente')
+                ->url(fn (): ?string => $this->reminderMailto(), shouldOpenInNewTab: true),
             Action::make('payment')
                 ->label('Registra incasso')
                 ->icon(Heroicon::OutlinedBanknotes)
@@ -233,7 +262,7 @@ class ViewInvoice extends ViewRecord
                 ->label('Nota di credito')
                 ->icon(Heroicon::OutlinedReceiptRefund)
                 ->color('gray')
-                ->visible(fn (): bool => $this->invoice()->status->isOutstanding() && $this->invoice()->type === DocumentType::Invoice)
+                ->visible(fn (): bool => $this->invoice()->status->isOutstanding() && $this->invoice()->type === DocumentType::Invoice && ! $this->isCoveredByCreditNotes())
                 ->requiresConfirmation()
                 ->modalDescription('Crea una bozza di nota di credito a storno totale di questa fattura; potrai modificarla prima di emetterla.')
                 ->action(function (): void {
@@ -268,51 +297,105 @@ class ViewInvoice extends ViewRecord
         return Section::make('Sistema di Interscambio')->compact()->columns(2)->components($entries);
     }
 
+    /**
+     * One row per payment, with the account it landed on and its own
+     * "Rimuovi": the movement goes with it.
+     */
     private function paymentsSection(): Section
     {
         $payments = app(InvoicePayments::class)->forInvoice($this->invoice()->id);
+        $accounts = app(Accounts::class)->options(activeOnly: false);
         $entries = [];
 
         foreach ($payments as $payment) {
             $entries[] = TextEntry::make('p_'.$payment->movementId)->label('')
-                ->state($payment->paidOn->isoFormat('D MMM YYYY').' · '.$payment->amount->format().' · '.$payment->description);
+                ->state($payment->paidOn->isoFormat('D MMM YYYY').' · '.$payment->amount->format().' · '.$payment->description.' · sul conto '.($accounts[$payment->accountId] ?? '—'))
+                ->suffixAction($this->removePaymentAction($payment));
         }
 
         if ($entries === []) {
             $entries[] = TextEntry::make('p_none')->label('')->state('Nessun incasso registrato.');
         }
 
-        return Section::make('Incassi')->compact()->components($entries)->headerActions([
-            Action::make('removePayment')
-                ->label('Rimuovi un incasso')
-                ->color('gray')
-                ->visible($payments !== [])
-                ->schema([
-                    Select::make('movement_id')->label('Incasso')->required()->options(self::paymentOptions($payments)),
-                ])
-                ->requiresConfirmation()
-                ->action(function (array $data): void {
-                    $this->run(function () use ($data): string {
-                        app(RemovePayment::class)->remove($this->invoice()->id, is_numeric($data['movement_id'] ?? null) ? (int) $data['movement_id'] : 0);
+        return Section::make('Incassi')->compact()->components($entries);
+    }
 
-                        return 'Incasso rimosso';
-                    });
-                }),
-        ]);
+    private function removePaymentAction(PaymentData $payment): Action
+    {
+        return Action::make('removePayment'.$payment->movementId)
+            ->label('Rimuovi')
+            ->icon(Heroicon::OutlinedTrash)
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalHeading('Rimuovere l\'incasso?')
+            ->modalDescription('Il movimento di cassa del '.$payment->paidOn->isoFormat('D MMM YYYY').' di '.$payment->amount->format().' viene eliminato e il residuo della fattura torna a salire.')
+            ->action(function () use ($payment): void {
+                $this->run(function () use ($payment): string {
+                    app(RemovePayment::class)->remove($this->invoice()->id, $payment->movementId);
+
+                    return 'Incasso rimosso';
+                });
+            });
     }
 
     /**
-     * @param  list<PaymentData>  $payments
-     * @return array<int, string>
+     * The credit notes that storno this invoice, oldest first.
+     *
+     * @return list<Invoice>
      */
-    private static function paymentOptions(array $payments): array
+    private function creditNotes(): array
     {
-        $options = [];
-        foreach ($payments as $payment) {
-            $options[$payment->movementId] = $payment->paidOn->isoFormat('D MMM YYYY').' · '.$payment->amount->format();
+        return array_values(Invoice::query()->where('related_invoice_id', $this->invoice()->id)->where('type', DocumentType::CreditNote->value)->orderBy('id')->get()->all());
+    }
+
+    /**
+     * A live credit note already covers the invoice: a draft (its total is
+     * not known yet) or issued notes adding up to the invoice's total.
+     */
+    private function isCoveredByCreditNotes(): bool
+    {
+        $credited = 0;
+
+        foreach ($this->creditNotes() as $note) {
+            if (! $note->status->isOutstanding() && $note->status !== InvoiceStatus::Draft) {
+                continue;
+            }
+            if ($note->status === InvoiceStatus::Draft) {
+                return true;
+            }
+            $credited += $note->total_cents;
         }
 
-        return $options;
+        return $credited > 0 && $credited >= $this->invoice()->total_cents;
+    }
+
+    private function customerEmail(): ?string
+    {
+        return app(FindContact::class)->resolve($this->invoice()->contact_id)?->email;
+    }
+
+    /**
+     * A reminder for the customer, ready in their mail client: the owner
+     * reads it over and sends it.
+     */
+    private function reminderMailto(): ?string
+    {
+        $email = $this->customerEmail();
+        if ($email === null) {
+            return null;
+        }
+
+        $data = $this->invoice()->toData();
+        $body = sprintf(
+            "Gentile cliente,\n\nla %s del %s di %s risulta ancora da incassare per %s; la scadenza era il %s.\n\nResto a disposizione per qualsiasi chiarimento.\n",
+            $data->title(),
+            $data->issuedOn?->isoFormat('D MMMM YYYY') ?? '—',
+            $data->total->format(),
+            $data->outstanding()->format(),
+            $data->dueOn?->isoFormat('D MMMM YYYY') ?? '—',
+        );
+
+        return 'mailto:'.$email.'?subject='.rawurlencode('Sollecito di pagamento: '.$data->title()).'&body='.rawurlencode($body);
     }
 
     private function draftTotals(Invoice $invoice): ?DocumentTotals

@@ -6,12 +6,15 @@ namespace App\Modules\Leads\Filament\Resources\Leads;
 
 use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Leads\Enums\LeadStatus;
+use App\Modules\Leads\Filament\Actions\MoveLeadAction;
 use App\Modules\Leads\Filament\Resources\Leads\Pages\CreateLead;
 use App\Modules\Leads\Filament\Resources\Leads\Pages\EditLead;
 use App\Modules\Leads\Filament\Resources\Leads\Pages\ListLeads;
 use App\Modules\Leads\Filament\Resources\Leads\Pages\ViewLead;
 use App\Modules\Leads\Models\Lead;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
@@ -44,6 +47,8 @@ class LeadResource extends Resource
     protected static ?string $pluralModelLabel = 'Lead';
 
     protected static ?string $slug = 'leads';
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Schema $schema): Schema
     {
@@ -82,8 +87,17 @@ class LeadResource extends Resource
                     ->query(fn (Builder $query): Builder => $query->whereIn('status', array_map(fn (LeadStatus $s): string => $s->value, LeadStatus::open()))),
                 Filter::make('due')->label('Da ricontattare')
                     ->query(fn (Builder $query): Builder => $query->whereIn('status', array_map(fn (LeadStatus $s): string => $s->value, LeadStatus::open()))->where('next_follow_up_on', '<=', $today->toDateString())),
+                Filter::make('closed')->label('Vinti e persi')
+                    ->query(fn (Builder $query): Builder => $query->whereIn('status', [LeadStatus::Won->value, LeadStatus::Lost->value])),
             ])
-            ->recordActions([ViewAction::make()])
+            ->recordActions([
+                ViewAction::make(),
+                MoveLeadAction::make(),
+                Action::make('convert')->label('Converti')->icon(Heroicon::OutlinedCheckBadge)->color('success')
+                    ->visible(fn (Lead $record): bool => $record->status->isOpen())
+                    ->url(fn (Lead $record): string => static::getUrl('view', ['record' => $record])),
+            ])
+            ->toolbarActions([BulkActionGroup::make([MoveLeadAction::bulk()])])
             ->paginated([25, 50]);
     }
 
@@ -95,6 +109,34 @@ class LeadResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'company', 'email'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Lead) {
+            return [];
+        }
+
+        return array_filter([
+            'Azienda' => $record->company,
+            'Stato' => $record->status->label(),
+        ], fn (?string $value): bool => $value !== null);
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array

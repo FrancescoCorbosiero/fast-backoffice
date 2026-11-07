@@ -16,6 +16,7 @@ use App\Modules\Cash\Models\Movement;
 use App\Modules\Cash\Queries\Accounts;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -30,6 +31,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -82,7 +84,8 @@ class MovementResource extends Resource
                 TextColumn::make('occurred_on')->label('Data')->date('d/m/Y')->sortable(),
                 TextColumn::make('description')->label('Descrizione')->searchable()->wrap()
                     ->description(fn (Movement $record): ?string => $record->allocation === null ? null : Allocations::label(Reference::fromString($record->allocation)))
-                    ->url(fn (Movement $record): ?string => $record->allocation === null ? null : Allocations::url(Reference::fromString($record->allocation))),
+                    ->url(fn (Movement $record): ?string => self::documentUrl($record))
+                    ->icon(fn (Movement $record): ?Heroicon => $record->isAllocated() ? Heroicon::ArrowTopRightOnSquare : null),
                 TextColumn::make('amount')->label('Importo')->alignEnd()
                     ->state(fn (Movement $record): string => Amounts::format($record->signedAmount()))
                     ->color(fn (Movement $record): string => $record->direction->color()),
@@ -101,14 +104,31 @@ class MovementResource extends Resource
                 ])->query(fn (Builder $query, array $data): Builder => $query
                     ->when(is_string($data['from'] ?? null) && $data['from'] !== '', fn (Builder $query) => $query->where('occurred_on', '>=', $data['from']))
                     ->when(is_string($data['to'] ?? null) && $data['to'] !== '', fn (Builder $query) => $query->where('occurred_on', '<=', $data['to']))),
+                TernaryFilter::make('allocated')->label('Collegato a un documento')
+                    ->queries(true: fn (Builder $query) => $query->whereNotNull('allocation'), false: fn (Builder $query) => $query->whereNull('allocation')),
+                Filter::make('uncategorised')->label('Senza categoria')->toggle()->query(fn (Builder $query): Builder => $query->whereNull('category_id')),
             ])
-            ->recordActions([EditAction::make()->visible(fn (Movement $record): bool => ! $record->isAllocated())])
+            ->recordActions([
+                EditAction::make()->visible(fn (Movement $record): bool => ! $record->isAllocated()),
+                Action::make('document')->label('Apri documento')->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->visible(fn (Movement $record): bool => $record->isAllocated())
+                    ->url(fn (Movement $record): ?string => self::documentUrl($record)),
+            ])
             ->paginated([25, 50, 100]);
     }
 
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['account', 'category']);
+    }
+
+    /**
+     * The document an allocated movement belongs to, through the presenter
+     * its module registered.
+     */
+    public static function documentUrl(Movement $record): ?string
+    {
+        return $record->allocation === null ? null : Allocations::url(Reference::fromString($record->allocation));
     }
 
     public static function canEdit(Model $record): bool

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Domains\Filament\Widgets;
 
+use App\Modules\Domains\Contributions\DomainsContactPanel;
 use App\Modules\Domains\Enums\DomainStatus;
 use App\Modules\Domains\Filament\Resources\Domains\DomainResource;
 use App\Modules\Domains\Models\Domain;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -23,6 +25,8 @@ class ContactDomainsTable extends TableWidget
     {
         return $table
             ->query(fn (): Builder => Domain::query()->where('contact_id', $this->contactId))
+            ->heading('Domini')
+            ->headerActions([DomainsContactPanel::newDomain($this->contactId)])
             ->defaultSort('expires_on')
             ->columns([
                 TextColumn::make('name')->label('Dominio')->url(fn (Domain $record): string => DomainResource::getUrl('view', ['record' => $record])),
@@ -30,7 +34,10 @@ class ContactDomainsTable extends TableWidget
                 IconColumn::make('auto_renew')->label('Auto')->boolean(),
                 TextColumn::make('status')->label('Stato')->badge()->formatStateUsing(fn (DomainStatus $state): string => $state->label())->color(fn (DomainStatus $state): string => $state->color()),
             ])
+            ->emptyStateIcon(Heroicon::OutlinedGlobeEuropeAfrica)
             ->emptyStateHeading('Nessun dominio')
+            ->emptyStateDescription('La scadenza entra nella previsione di cassa e "Registra rinnovo" la sposta avanti.')
+            ->emptyStateActions([DomainsContactPanel::newDomain($this->contactId)])
             ->paginated([10, 25]);
     }
 }

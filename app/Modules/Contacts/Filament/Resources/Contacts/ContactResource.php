@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Contacts\Filament\Resources\Contacts;
 
+use App\Modules\Contacts\Enums\ContactRole;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\EditContact;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\ListContacts;
@@ -59,6 +60,36 @@ class ContactResource extends Resource
     {
         // A contact is never deleted: other modules' documents point at it. Merge duplicates instead.
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['display_name', 'email', 'vat_number', 'tax_code', 'city'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Contact) {
+            return [];
+        }
+
+        $roles = implode(', ', array_map(fn (ContactRole $role): string => $role->label(), $record->roleEnums()));
+
+        return array_filter([
+            'Ruolo' => $roles !== '' ? $roles : null,
+            'Città' => $record->city,
+        ], fn (?string $value): bool => $value !== null);
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array

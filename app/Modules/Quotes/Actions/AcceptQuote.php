@@ -51,7 +51,8 @@ final readonly class AcceptQuote
             }
 
             $data = $quote->toData();
-            $input = new DraftInput(contactId: $data->contactId, lines: $data->lines, notes: $data->subject === null ? null : 'Rif. '.$data->title().': '.$data->subject);
+            // The document always says which quote it comes from: the one way back from an invoice to its quote.
+            $input = new DraftInput(contactId: $data->contactId, lines: $data->lines, notes: 'Rif. '.$data->title().($data->subject === null ? '' : ': '.$data->subject));
 
             $changes = ['status' => QuoteStatus::Accepted, 'decided_on' => $acceptedOn->toDateString()];
             if ($outcome === AcceptanceOutcome::InvoiceDraft) {

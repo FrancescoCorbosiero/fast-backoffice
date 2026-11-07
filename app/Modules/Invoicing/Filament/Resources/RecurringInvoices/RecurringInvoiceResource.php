@@ -6,7 +6,9 @@ namespace App\Modules\Invoicing\Filament\Resources\RecurringInvoices;
 
 use App\Kernel\Dates\Frequency;
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
+use App\Modules\Contacts\Queries\FindContact;
 use App\Modules\Invoicing\Actions\IssueRecurringInvoice;
 use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
@@ -79,6 +81,13 @@ class RecurringInvoiceResource extends Resource
             ->defaultSort('next_issue_on')
             ->columns([
                 TextColumn::make('name')->label('Nome')->weight('bold')->searchable(),
+                TextColumn::make('contact_id')->label('Cliente')
+                    ->state(function (RecurringInvoice $record): string {
+                        $contact = app(FindContact::class)->resolve($record->contact_id);
+
+                        return $contact === null ? '—' : $contact->displayName;
+                    })
+                    ->url(fn (RecurringInvoice $record): string => ContactLink::url($record->contact_id)),
                 TextColumn::make('frequency')->label('Frequenza')->formatStateUsing(fn (Frequency $state): string => $state->label()),
                 TextColumn::make('next_issue_on')->label('Prossima emissione')->date('d/m/Y')->sortable()
                     ->color(fn (RecurringInvoice $record): ?string => $record->is_active && $record->next_issue_on->lessThan(today()) ? 'danger' : null),
@@ -104,6 +113,9 @@ class RecurringInvoiceResource extends Resource
                             ->actions([Action::make('open')->label('Apri')->url(InvoiceResource::getUrl('view', ['record' => $invoice->id]))])
                             ->send();
                     }),
+                Action::make('invoices')->label('Fatture emesse')->icon(Heroicon::OutlinedDocumentText)->color('gray')
+                    ->visible(fn (RecurringInvoice $record): bool => $record->last_issued_on !== null)
+                    ->url(fn (RecurringInvoice $record): string => self::invoicesUrl($record->id)),
                 EditAction::make(),
             ])
             ->paginated([25, 50]);
@@ -112,6 +124,14 @@ class RecurringInvoiceResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * The invoice list filtered to what this schedule generated.
+     */
+    public static function invoicesUrl(int $recurringInvoiceId): string
+    {
+        return InvoiceResource::getUrl('index', ['filters' => ['recurring_invoice_id' => ['value' => (string) $recurringInvoiceId]]]);
     }
 
     public static function getPages(): array

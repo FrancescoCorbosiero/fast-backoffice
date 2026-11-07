@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Calendar\Filament\Widgets;
 
+use App\Modules\Calendar\Filament\Resources\Bookings\BookingResource;
 use App\Modules\Calendar\Queries\Bookings;
 use Carbon\CarbonImmutable;
 use Filament\Widgets\StatsOverviewWidget;
@@ -25,7 +26,8 @@ class UpcomingBookingsWidget extends StatsOverviewWidget
 
         return [
             Stat::make('Appuntamenti nei prossimi 7 giorni', (string) count($thisWeek))
-                ->description($next === null ? 'nessuno in agenda' : 'prossimo: '.$next->startsAt->isoFormat('ddd D MMM HH:mm').' · '.($next->attendeeName ?? $next->title)),
+                ->description($next === null ? 'nessuno in agenda' : 'prossimo: '.$next->startsAt->isoFormat('ddd D MMM HH:mm').' · '.($next->attendeeName ?? $next->title))
+                ->url($next === null ? BookingResource::getUrl('index') : BookingResource::getUrl('view', ['record' => $next->id])),
         ];
     }
 }

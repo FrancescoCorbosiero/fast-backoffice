@@ -11,8 +11,10 @@ use App\Modules\Contacts\Events\ContactsMerged;
 use App\Modules\Domains\Contributions\DomainAllocationPresenter;
 use App\Modules\Domains\Contributions\DomainRenewalsSchedule;
 use App\Modules\Domains\Contributions\DomainsContactPanel;
+use App\Modules\Domains\Contributions\DomainsWebsitePanel;
 use App\Modules\Domains\Filament\DomainsPlugin;
 use App\Modules\Domains\Listeners\RepointMergedContact;
+use App\Modules\Websites\Contracts\WebsitePanel;
 use App\Support\ModuleServiceProvider;
 use Illuminate\Support\Facades\Event;
 
@@ -35,6 +37,7 @@ class DomainsServiceProvider extends ModuleServiceProvider
         $this->app->tag([DomainRenewalsSchedule::class], CashFlowSchedule::TAG);
         $this->app->tag([DomainAllocationPresenter::class], AllocationPresenter::TAG);
         $this->app->tag([DomainsContactPanel::class], ContactPanel::TAG);
+        $this->app->tag([DomainsWebsitePanel::class], WebsitePanel::TAG);
     }
 
     public function boot(): void

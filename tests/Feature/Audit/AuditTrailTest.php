@@ -6,6 +6,7 @@ use App\Kernel\Reference;
 use App\Modules\Audit\Actions\RecordAuditEntry;
 use App\Modules\Audit\Filament\Resources\AuditEntries\Pages\ListAuditEntries;
 use App\Modules\Audit\Queries\AuditTrail;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Livewire;
 
 it('records who did what to which record', function (): void {
@@ -50,4 +51,21 @@ it('shows the trail in the panel, read-only', function (): void {
         ->assertSee('Studio');
 
     $this->get('/admin/audit-entries/create')->assertNotFound();
+});
+
+it('links an entry to its record, names the author and reads the details in plain words', function (): void {
+    signInAsOwner();
+    app(RecordAuditEntry::class)->record('invoicing.invoice.paid', Reference::to('invoice', 7), ['paid' => true, 'amount' => '120,00']);
+    Auth::logout();
+    app(RecordAuditEntry::class)->record('scheduling.job.ran', Reference::to('domain_renewal', '3:2027-01-31'));
+    signInAsOwner();
+
+    Livewire::test(ListAuditEntries::class)
+        ->assertSeeHtml('/admin/invoices/7')
+        ->assertSeeHtml('/admin/domains/3')
+        ->assertSee('titolare')->assertSee('sistema')
+        ->assertSee('paid: sì, amount: 120,00')
+        ->filterTable('actor', false)
+        ->assertCanSeeTableRecords(App\Modules\Audit\Models\AuditEntry::query()->whereNull('actor_id')->get())
+        ->assertCanNotSeeTableRecords(App\Modules\Audit\Models\AuditEntry::query()->whereNotNull('actor_id')->get());
 });

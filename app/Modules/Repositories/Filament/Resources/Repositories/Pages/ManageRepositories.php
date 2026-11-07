@@ -4,25 +4,53 @@ declare(strict_types=1);
 
 namespace App\Modules\Repositories\Filament\Resources\Repositories\Pages;
 
-use App\Modules\Repositories\Actions\SaveRepository;
-use App\Modules\Repositories\Data\RepositoryInput;
+use App\Modules\Repositories\Filament\Resources\Repositories\RepositoryActions;
 use App\Modules\Repositories\Filament\Resources\Repositories\RepositoryResource;
-use App\Modules\Repositories\Models\Repository;
-use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ManageRecords;
 
 class ManageRepositories extends ManageRecords
 {
     protected static string $resource = RepositoryResource::class;
 
+    /**
+     * Reached as /admin/repositories?contact_id=12&website_id=3 from a
+     * contact's or a site's page, the create modal already knows them.
+     * Read once when the page loads: the modal opens in a later Livewire
+     * request, which no longer carries the page's query string.
+     *
+     * @var array<string, int>
+     */
+    public array $prefill = [];
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        $this->prefill = $this->prefillFromQuery();
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->using(function (array $data): Repository {
-                $repository = app(SaveRepository::class)->create(RepositoryInput::fromArray($data));
-
-                return Repository::query()->findOrFail($repository->id);
-            }),
+            RepositoryActions::create($this->prefill),
         ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function prefillFromQuery(): array
+    {
+        $prefill = [];
+
+        foreach (['contact_id', 'website_id'] as $field) {
+            $value = request()->query($field);
+
+            if (is_string($value) && ctype_digit($value) && (int) $value > 0) {
+                $prefill[$field] = (int) $value;
+            }
+        }
+
+        return $prefill;
     }
 }

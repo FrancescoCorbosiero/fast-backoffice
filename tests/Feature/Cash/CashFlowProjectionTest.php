@@ -6,9 +6,13 @@ use App\Kernel\Money\Money;
 use App\Modules\Cash\Contracts\CashFlowSchedule;
 use App\Modules\Cash\Data\ExpectedFlow;
 use App\Modules\Cash\Data\Projection;
+use App\Modules\Cash\Filament\Pages\CashFlowProjectionPage;
+use App\Modules\Cash\Models\Account;
+use App\Modules\Cash\Models\Movement;
 use App\Modules\Cash\Models\RecurringExpense;
 use App\Modules\Cash\Queries\CashFlowProjection;
 use Carbon\CarbonImmutable;
+use Livewire\Livewire;
 
 /**
  * The specification ported from hive-crm's CashFlowProjectionTest: the
@@ -129,4 +133,20 @@ it('shows the projection page and computes it once per render', function (): voi
         ->assertSee('mag 2026');
 
     expect(app('tests.cash-flow-schedule')->calls)->toBe(1);
+});
+
+it('leads from a projected row to its document and logs an overdue expense without leaving', function (): void {
+    signInAsOwner();
+    $this->travelTo('2026-05-15');
+    $account = Account::factory()->create();
+    $expense = RecurringExpense::factory()->create(['name' => 'Figma', 'account_id' => $account->id, 'next_due_on' => '2026-05-10']);
+    contributeFlows([]);
+
+    Livewire::test(CashFlowProjectionPage::class)
+        ->assertSee("/admin/cash/recurring-expenses/{$expense->id}/edit", escape: false)
+        ->callTableAction('log', 'flow-0', ['paid_on' => '2026-05-12', 'account_id' => $account->id])
+        ->assertNotified();
+
+    expect(Movement::query()->sole()->allocation)->toBe("recurring_expense:{$expense->id}:2026-05-10")
+        ->and($expense->refresh()->next_due_on->toDateString())->toBe('2026-06-10');
 });

@@ -6,6 +6,7 @@ namespace App\Modules\Cash\Filament\Widgets;
 
 use App\Modules\Cash\Enums\Direction;
 use App\Modules\Cash\Filament\Components\Amounts;
+use App\Modules\Cash\Filament\Resources\Movements\MovementResource;
 use App\Modules\Cash\Queries\Analytics;
 use Carbon\CarbonImmutable;
 use Filament\Widgets\StatsOverviewWidget;
@@ -24,9 +25,28 @@ class YearToDateWidget extends StatsOverviewWidget
         $net = $in->minus($out);
 
         return [
-            Stat::make('Entrate '.$today->year, Amounts::format($in))->color('success'),
-            Stat::make('Uscite '.$today->year, Amounts::format($out))->color('danger'),
-            Stat::make('Netto '.$today->year, Amounts::format($net))->color($net->isNegative() ? 'danger' : 'success'),
+            Stat::make('Entrate '.$today->year, Amounts::format($in))->color('success')->url(self::movementsUrl($today, Direction::In)),
+            Stat::make('Uscite '.$today->year, Amounts::format($out))->color('danger')->url(self::movementsUrl($today, Direction::Out)),
+            Stat::make('Netto '.$today->year, Amounts::format($net))->color($net->isNegative() ? 'danger' : 'success')->url(self::movementsUrl($today)),
         ];
+    }
+
+    /**
+     * The movements list filtered to the year so far, one direction or
+     * both, and optionally one category: the rows behind a figure.
+     */
+    public static function movementsUrl(CarbonImmutable $today, ?Direction $direction = null, ?int $categoryId = null): string
+    {
+        $filters = ['period' => ['from' => $today->startOfYear()->toDateString(), 'to' => $today->toDateString()]];
+
+        if ($direction !== null) {
+            $filters['direction'] = ['value' => $direction->value];
+        }
+
+        if ($categoryId !== null) {
+            $filters['category_id'] = ['value' => (string) $categoryId];
+        }
+
+        return MovementResource::getUrl('index', ['filters' => $filters]);
     }
 }

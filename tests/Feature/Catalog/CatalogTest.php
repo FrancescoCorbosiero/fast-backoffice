@@ -32,5 +32,17 @@ it('manages the catalog from the panel with prices and VAT as people write them'
         ->callTableAction('edit', $service, ['name' => 'Consulenza', 'unit_price' => '90', 'vat_percent' => '0', 'natura' => 'N2.2', 'is_active' => true])
         ->assertHasNoTableActionErrors();
 
-    expect($service->refresh()->unit_price_cents)->toBe(9_000)->and($service->natura?->value)->toBe('N2.2');
+    expect($service->refresh()->unit_price_cents)->toBe(9_000)->and($service->natura?->value)->toBe('N2.2')->and($service->sort)->toBe(1);
+
+    // The list shows what the picker shows, and the rows are dragged into the picker's order.
+    $hosting = Service::factory()->create(['name' => 'Hosting', 'sort' => 2]);
+    $retired = Service::factory()->create(['name' => 'Ritirato', 'is_active' => false]);
+
+    Livewire::test(ManageServices::class)
+        ->assertCanSeeTableRecords([$service, $hosting])->assertCanNotSeeTableRecords([$retired])
+        ->filterTable('is_active', false)->assertCanSeeTableRecords([$retired])->assertCanNotSeeTableRecords([$service])
+        ->call('reorderTable', [$hosting->id, $service->id]);
+
+    expect($hosting->refresh()->sort)->toBeLessThan($service->refresh()->sort)
+        ->and(array_keys(app(Services::class)->options()))->toBe([$hosting->id, $service->id]);
 });

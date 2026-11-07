@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Websites\Filament\Widgets;
 
+use App\Modules\Websites\Contributions\WebsitesContactPanel;
 use App\Modules\Websites\Enums\WebsiteStatus;
 use App\Modules\Websites\Filament\Resources\Websites\WebsiteResource;
 use App\Modules\Websites\Models\Website;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -23,6 +25,8 @@ class ContactWebsitesTable extends TableWidget
     {
         return $table
             ->query(fn (): Builder => Website::query()->where('contact_id', $this->contactId))
+            ->heading('Siti')
+            ->headerActions([WebsitesContactPanel::newWebsite($this->contactId)])
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')->label('Nome')->url(fn (Website $record): string => WebsiteResource::getUrl('view', ['record' => $record])),
@@ -31,7 +35,10 @@ class ContactWebsitesTable extends TableWidget
                 IconColumn::make('is_up')->label('Online')->boolean()->placeholder('—'),
                 TextColumn::make('hosting_renews_on')->label('Rinnovo hosting')->date('d/m/Y')->placeholder('—'),
             ])
+            ->emptyStateIcon(Heroicon::OutlinedGlobeAlt)
             ->emptyStateHeading('Nessun sito')
+            ->emptyStateDescription('Hosting, canone e controllo online partono da qui.')
+            ->emptyStateActions([WebsitesContactPanel::newWebsite($this->contactId)])
             ->paginated([10, 25]);
     }
 }

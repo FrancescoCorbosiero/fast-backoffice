@@ -61,7 +61,7 @@ class ViewPaymentRequest extends ViewRecord
 
         return $schema->components([
             Section::make()->columns(count($header))->components($header),
-            ...DocumentInfolist::parties(null, $contact === null ? null : PartySnapshot::ofCustomer($contact)),
+            ...DocumentInfolist::parties(null, $contact === null ? null : PartySnapshot::ofCustomer($contact), contactId: $request->contact_id),
             DocumentInfolist::lines($data->lines),
             DocumentInfolist::totals($data->totals),
         ]);

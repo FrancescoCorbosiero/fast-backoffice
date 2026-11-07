@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Mail\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
@@ -16,10 +18,20 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $outcome
  * @property ?string $note
  * @property ?array<string, mixed> $payload
+ * @property CarbonImmutable $received_at
+ * @property-read ?CampaignRecipient $recipient
  */
 class MailEvent extends Model
 {
     protected $guarded = [];
+
+    /**
+     * @return BelongsTo<CampaignRecipient, $this>
+     */
+    public function recipient(): BelongsTo
+    {
+        return $this->belongsTo(CampaignRecipient::class);
+    }
 
     /**
      * @return array<string, string>
