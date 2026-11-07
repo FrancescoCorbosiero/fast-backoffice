@@ -19,7 +19,7 @@
         -Server
     }
 
-    php_fastcgi app:9000 {
+    php_fastcgi fast-backoffice-fpm:9000 {
         resolve_root_symlink
     }
     file_server

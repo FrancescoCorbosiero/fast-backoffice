@@ -6,7 +6,7 @@ How fast-backoffice runs in production (design.md §7), and what to do when some
 
 | Service | Image / command | Notes |
 |---|---|---|
-| `web` | `fast-backoffice/web` (Caddy) | Ports 80/443, Let's Encrypt for `$DOMAIN`, serves `public/`, FastCGI to `app:9000` |
+| `web` | `fast-backoffice/web` (Caddy) | Ports 80/443, Let's Encrypt for `$DOMAIN`, serves `public/`, FastCGI to `fast-backoffice-fpm:9000` (the `app` container's alias: on a shared proxy network a plain `app` could be another stack's) |
 | `app` | `fast-backoffice/app`, `php-fpm` | The panel, the client portal (`/area-clienti/`) and the webhooks (`/webhooks/calcom`, `/webhooks/ses`, `/unsubscribe/{token}`) |
 | `horizon` | same image, `php artisan horizon` | Queue: campaign emails. Dashboard at `/horizon`, owner only |
 | `scheduler` | same image, `php artisan schedule:work` | The Scheduling module's jobs (`/admin/jobs` lists them) |

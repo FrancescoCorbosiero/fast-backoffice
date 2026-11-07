@@ -1,5 +1,5 @@
 # Nightly database backup to S3-compatible storage (docs/runbook.md, "Backups").
-FROM alpine:3.21
+FROM alpine:3.23
 
 RUN apk add --no-cache postgresql18-client aws-cli gzip coreutils tzdata
 
