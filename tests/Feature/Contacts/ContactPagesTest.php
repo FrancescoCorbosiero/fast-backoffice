@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Contacts\Contracts\ContactPanel;
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\EditContact;
@@ -12,9 +13,12 @@ use App\Modules\Contacts\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Modules\Contacts\Models\Contact;
 use App\Modules\Contacts\Queries\FindContact;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -39,18 +43,43 @@ it('lists live contacts in a constant number of queries', function (): void {
     expect(count(DB::getQueryLog()))->toBe($queries);
 });
 
-it('filters the list by role and by mailability', function (): void {
+it('splits the list into one tab per role, coloured by role, and filters by mailability', function (): void {
     $client = Contact::factory()->create(['display_name' => 'Client One']);
     $supplier = Contact::factory()->supplier()->withoutConsent()->create(['display_name' => 'Supplier One']);
 
     Livewire::test(ListContacts::class)
-        ->filterTable('role', ContactRole::Supplier->value)
+        ->assertSee('Tutti')
+        ->assertSee('Clienti')
+        ->assertSee('Fornitori')
+        ->set('activeTab', ContactRole::Supplier->value)
         ->assertCanSeeTableRecords([$supplier])
         ->assertCanNotSeeTableRecords([$client])
-        ->resetTableFilters()
+        ->assertSeeHtml('fi-color-warning')
+        ->set('activeTab', 'all')
         ->filterTable('mailable')
         ->assertCanSeeTableRecords([$client])
         ->assertCanNotSeeTableRecords([$supplier]);
+});
+
+it('welcomes a fresh install with what contacts are for and a way to create the first one', function (): void {
+    Livewire::test(ListContacts::class)
+        ->assertSee('Nessun contatto')
+        ->assertSee('Da un contatto nascono preventivi, fatture e siti.')
+        ->assertSee('Nuovo contatto');
+});
+
+it('hints on the form that a contact with the same email or VAT number already exists, with a link to it', function (): void {
+    $existing = Contact::factory()->withVatNumber()->create(['display_name' => 'Mario Rossi', 'email' => 'mario@rossi.test']);
+
+    Livewire::test(CreateContact::class)
+        ->fillForm(['email' => 'Mario@Rossi.test'])
+        ->assertSee('Esiste già: Mario Rossi')
+        ->assertSeeHtml(ContactLink::url($existing->id))
+        ->fillForm(['email' => null, 'vat_number' => '01234567897'])
+        ->assertSee('Un altro contatto ha già questa partita IVA: Mario Rossi');
+
+    Livewire::test(EditContact::class, ['record' => $existing->id])
+        ->assertDontSee('Esiste già');
 });
 
 it('creates a contact from the form through the module action', function (): void {
@@ -94,10 +123,49 @@ it('edits a contact through the module action', function (): void {
     Livewire::test(EditContact::class, ['record' => $contact->id])
         ->fillForm(['phone' => '+39 333 1234567', 'roles' => ['client', 'partner']])
         ->call('save')
-        ->assertHasNoFormErrors();
+        ->assertHasNoFormErrors()
+        ->assertRedirect(ContactLink::url($contact->id));
 
     expect($contact->refresh()->phone)->toBe('+39 333 1234567')
         ->and($contact->roles)->toBe(['client', 'partner']);
+});
+
+it('goes back where the owner came from after completing a contact opened with ?return=', function (): void {
+    $contact = Contact::factory()->create();
+
+    expect(ContactLink::editUrl($contact->id, '/admin/invoices/7/edit'))->toContain('return=');
+
+    Livewire::withQueryParams(['return' => '/admin/invoices/7/edit'])
+        ->test(EditContact::class, ['record' => $contact->id])
+        ->fillForm(['tax_code' => 'RSSMRA85T10A562S'])
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertRedirect('/admin/invoices/7/edit');
+
+    Livewire::withQueryParams(['return' => 'https://elsewhere.test/'])
+        ->test(EditContact::class, ['record' => $contact->id])
+        ->call('save')
+        ->assertRedirect(ContactLink::url($contact->id));
+});
+
+it('links email, phone and PEC on the contact page and says whether the contact can be invoiced', function (): void {
+    $incomplete = Contact::factory()->suppressed('rimbalzo')->create(['email' => 'mario@rossi.test', 'phone' => '+39 333 123 4567', 'pec' => 'mario@pec.test']);
+
+    $this->get("/admin/contacts/{$incomplete->id}")
+        ->assertOk()
+        ->assertSee('mailto:mario@rossi.test', escape: false)
+        ->assertSee('tel:+393331234567', escape: false)
+        ->assertSee('mailto:mario@pec.test', escape: false)
+        ->assertSee('bloccata: rimbalzo')
+        ->assertSee('Manca partita IVA o codice fiscale: non fatturabile')
+        ->assertSee('Completa')
+        ->assertSee(ContactLink::editUrl($incomplete->id), escape: false);
+
+    $invoiceable = Contact::factory()->withVatNumber()->create(['pec' => 'studio@pec.test']);
+
+    $this->get("/admin/contacts/{$invoiceable->id}")
+        ->assertSee('Fatturabile: PEC studio@pec.test')
+        ->assertDontSee('non fatturabile');
 });
 
 it('shows the contact page with the sections other modules contribute, and their create actions in the "Nuovo" menu', function (): void {
@@ -161,9 +229,9 @@ it('offers, for every section of the contact page that lists things the owner cr
     sort($withCreate);
     sort($withoutCreate);
 
-    // Bookings come from Cal.com and campaigns go to many contacts: those two explain themselves instead.
-    expect($withCreate)->toBe(['cash-movements', 'domains', 'invoices', 'quotes', 'repositories', 'websites'])
-        ->and($withoutCreate)->toBe(['bookings', 'campaigns']);
+    // Bookings come from Cal.com, campaigns go to many contacts, leads arrive from the website: those explain themselves instead.
+    expect($withCreate)->toBe(['cash-movements', 'change-requests', 'domains', 'invoices', 'quotes', 'repositories', 'websites'])
+        ->and($withoutCreate)->toBe(['bookings', 'campaigns', 'leads']);
 });
 
 it('blocks and unblocks email, toggles consent and merges from the contact page', function (): void {
@@ -189,15 +257,37 @@ it('blocks and unblocks email, toggles consent and merges from the contact page'
     $this->get("/admin/contacts/{$duplicate->id}")->assertNotFound();
 });
 
-it('offers a picker that searches contacts and creates one inline with the given roles', function (): void {
+it('offers a picker that searches contacts, says who can be invoiced, and creates one inline with the given roles or asks for them', function (): void {
     Contact::factory()->supplier()->create(['display_name' => 'Fornitore Uno', 'email' => 'uno@supplier.test']);
-    Contact::factory()->create(['display_name' => 'Cliente Uno']);
+    $client = Contact::factory()->withVatNumber()->create(['display_name' => 'Cliente Uno', 'email' => null]);
 
     $picker = ContactPicker::make('supplier_id', [ContactRole::Supplier]);
 
     expect($picker->getName())->toBe('supplier_id')
-        ->and($picker->getSearchResults('uno'))->toBe([Contact::query()->where('display_name', 'Fornitore Uno')->value('id') => 'Fornitore Uno · uno@supplier.test']);
+        ->and($picker->getSearchResults('uno'))->toBe([Contact::query()->where('display_name', 'Fornitore Uno')->value('id') => 'Fornitore Uno · uno@supplier.test · senza identità fiscale']);
 
     $anyRole = ContactPicker::make('contact_id', []);
-    expect($anyRole->getSearchResults('uno'))->toHaveCount(2);
+    expect($anyRole->getSearchResults('uno'))->toHaveCount(2)
+        ->and($anyRole->getSearchResults('cliente'))->toBe([$client->id => 'Cliente Uno · P.IVA 01234567897']);
+
+    $fieldNames = function (Select $select): array {
+        $names = [];
+        $walk = function (array $components) use (&$names, &$walk): void {
+            foreach ($components as $component) {
+                if ($component instanceof Field) {
+                    $names[] = $component->getName();
+                } elseif ($component instanceof Section) {
+                    $children = $component->getDefaultChildComponents();
+                    $walk(is_array($children) ? $children : []);
+                }
+            }
+        };
+        $form = $select->getCreateOptionActionForm(Schema::make());
+        $walk(is_array($form) ? $form : []);
+
+        return $names;
+    };
+
+    expect($fieldNames($anyRole))->toContain('roles', 'tax_code', 'sdi_code', 'pec')
+        ->and($fieldNames($picker))->not->toContain('roles');
 });

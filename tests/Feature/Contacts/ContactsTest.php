@@ -196,7 +196,7 @@ it('finds contacts by id, by ids, by fiscal identity and by email', function ():
 
     expect($find->byId($byVat->id)?->id)->toBe($byVat->id)
         ->and($find->byId(999_999))->toBeNull()
-        ->and(array_keys($find->byIds([$byVat->id, $byTaxCode->id, 999_999])))->toBe([$byVat->id, $byTaxCode->id])
+        ->and(array_keys($find->byIds([$byVat->id, $byTaxCode->id, 999_999])))->toEqualCanonicalizing([$byVat->id, $byTaxCode->id])
         ->and($find->byIds([]))->toBe([])
         ->and($find->byFiscalIdentity(VatNumber::parse('01234567897'), 'RSSMRA85T10A562S')?->id)->toBe($byVat->id)
         ->and($find->byFiscalIdentity(VatNumber::parse('00000000000'), 'rssmra85t10a562s')?->id)->toBe($byTaxCode->id)

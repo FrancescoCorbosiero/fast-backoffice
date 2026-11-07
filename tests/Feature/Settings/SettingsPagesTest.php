@@ -2,9 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Modules\Settings\Actions\SaveSdiSettings;
+use App\Modules\Settings\Data\SdiSettings;
 use App\Modules\Settings\Filament\Pages\BusinessProfilePage;
 use App\Modules\Settings\Filament\Pages\InvoiceDefaultsPage;
+use App\Modules\Settings\Filament\Pages\MailSettingsPage;
 use App\Modules\Settings\Filament\Pages\NumberingSeriesPage;
+use App\Modules\Settings\Filament\Widgets\SetupChecklistWidget;
 use App\Modules\Settings\Queries\GetBusinessProfile;
 use App\Modules\Settings\Queries\GetInvoiceDefaults;
 use App\Modules\Settings\Queries\GetNumberingSeries;
@@ -17,6 +21,28 @@ beforeEach(function (): void {
 it('renders the settings pages', function (string $url): void {
     $this->get($url)->assertOk();
 })->with(['/admin/settings/business-profile', '/admin/settings/invoices', '/admin/settings/numbering']);
+
+it('leads from the invoice defaults to the series, shows each series\' last number, and from the mail settings to the campaigns', function (): void {
+    Livewire::test(InvoiceDefaultsPage::class)->assertSee('Gestisci le serie')->assertSeeHtml('/admin/settings/numbering');
+    Livewire::test(NumberingSeriesPage::class)->assertSee('Ultimo numero del')->assertSee('nessuno');
+    Livewire::test(MailSettingsPage::class)->assertActionExists('campaigns');
+});
+
+it('lists on the dashboard what is still to set up, until nothing is missing', function (): void {
+    expect(SetupChecklistWidget::canView())->toBeTrue();
+    Livewire::test(SetupChecklistWidget::class)
+        ->assertSee('Profilo aziendale')->assertSeeHtml('/admin/settings/business-profile')
+        ->assertSee('PEC dell\'app')->assertSeeHtml('/admin/settings/sdi');
+
+    Livewire::test(BusinessProfilePage::class)
+        ->fillForm(['type' => 'company', 'business_name' => 'Studio Srl', 'vat_number' => '01234567897', 'regime' => 'RF01', 'street' => 'Via Roma', 'postcode' => '00100', 'city' => 'Roma', 'country' => 'IT'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+    app(SaveSdiSettings::class)->save(new SdiSettings('studio@pec.test'));
+    config(['pec.smtp.host' => 'smtp.pec.test', 'pec.imap.host' => 'imap.pec.test']);
+
+    expect(SetupChecklistWidget::canView())->toBeFalse();
+});
 
 it('saves the business profile from the form', function (): void {
     Livewire::test(BusinessProfilePage::class)

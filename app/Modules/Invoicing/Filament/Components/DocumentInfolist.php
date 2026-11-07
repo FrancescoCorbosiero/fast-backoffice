@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Invoicing\Filament\Components;
 
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Invoicing\Data\DocumentTotals;
 use App\Modules\Invoicing\Data\LineInput;
 use App\Modules\Invoicing\Data\PartySnapshot;
@@ -19,15 +20,19 @@ use Filament\Schemas\Components\Section;
 final class DocumentInfolist
 {
     /**
+     * The customer block leads to the contact's page when its id is given:
+     * from there, the client's other invoices, quotes and websites.
+     *
      * @return list<Component>
      */
-    public static function parties(?PartySnapshot $seller, ?PartySnapshot $customer, string $customerLabel = 'Cliente'): array
+    public static function parties(?PartySnapshot $seller, ?PartySnapshot $customer, string $customerLabel = 'Cliente', ?int $contactId = null): array
     {
         $components = [];
 
         if ($customer !== null) {
             $components[] = Section::make($customerLabel)->compact()->components([
-                TextEntry::make('customer_block')->label('')->state(self::party($customer)),
+                TextEntry::make('customer_block')->label('')->state(self::party($customer))
+                    ->url($contactId === null ? null : ContactLink::url($contactId)),
             ]);
         }
 

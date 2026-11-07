@@ -17,6 +17,8 @@ return [
 
     'api_key' => env('CALCOM_API_KEY'),
     'api_url' => env('CALCOM_API_URL', 'https://api.cal.com/v2'),
+    // Where the owner opens a booking in Cal.com; change it for a self-hosted instance.
+    'app_url' => env('CALCOM_APP_URL', 'https://app.cal.com'),
     'api_version' => env('CALCOM_API_VERSION', '2024-08-13'),
     'webhook_secret' => env('CALCOM_WEBHOOK_SECRET'),
 

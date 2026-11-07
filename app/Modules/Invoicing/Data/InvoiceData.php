@@ -54,6 +54,7 @@ final readonly class InvoiceData
         public ?CarbonImmutable $sdiOutcomeAt = null,
         public array $sdiErrors = [],
         public ?CarbonImmutable $rejectedAt = null,
+        public ?int $recurringInvoiceId = null,
     ) {}
 
     /**

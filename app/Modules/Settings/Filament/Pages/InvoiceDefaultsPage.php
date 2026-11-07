@@ -10,6 +10,7 @@ use App\Modules\Settings\Data\InvoiceDefaults;
 use App\Modules\Settings\Queries\GetInvoiceDefaults;
 use App\Modules\Settings\Queries\GetNumberingSeries;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -51,8 +52,10 @@ class InvoiceDefaultsPage extends SettingsPage
                     ->visible(fn (Get $get): bool => (bool) $get('inps_contribution_enabled'))->required(),
             ]),
             Section::make('Numerazione')->columns(2)->components([
-                Select::make('invoice_series')->label('Serie delle fatture')->options($this->seriesOptions())->required(),
-                Select::make('credit_note_series')->label('Serie delle note di credito')->options($this->seriesOptions())->required(),
+                Select::make('invoice_series')->label('Serie delle fatture')->options($this->seriesOptions())->required()
+                    ->hintAction(self::manageSeries()),
+                Select::make('credit_note_series')->label('Serie delle note di credito')->options($this->seriesOptions())->required()
+                    ->hintAction(self::manageSeries()),
             ]),
         ]);
     }
@@ -65,6 +68,17 @@ class InvoiceDefaultsPage extends SettingsPage
     protected function persist(array $state): void
     {
         app(SaveInvoiceDefaults::class)->save(InvoiceDefaults::fromArray($state));
+    }
+
+    /**
+     * A new series (a second one, next year's) is made on Numerazione.
+     */
+    private static function manageSeries(): Action
+    {
+        return Action::make('series')
+            ->label('Gestisci le serie')
+            ->icon(Heroicon::OutlinedHashtag)
+            ->url(NumberingSeriesPage::getUrl());
     }
 
     /**

@@ -74,11 +74,12 @@ final class CampaignsContactPanel implements ContactPanel
     }
 
     /**
-     * Why this contact has received no campaign yet, in one sentence: it
+     * Whether the next campaign reaches this contact, in one sentence: it
      * will get the next one aimed at its role, or what stops it from being
-     * mailed (no address, no consent, a blocked address).
+     * mailed (no address, no consent, a blocked address). The heading of
+     * the contact's campaigns section and its empty state.
      */
-    public static function emptyStateDescription(int $contactId): string
+    public static function mailabilityDescription(int $contactId): string
     {
         $contact = app(FindContact::class)->byId($contactId);
 
@@ -87,18 +88,20 @@ final class CampaignsContactPanel implements ContactPanel
         }
 
         if ($contact->email === null) {
-            return 'Senza un indirizzo email non può ricevere campagne: aggiungilo al contatto.';
+            return 'Non riceve: senza un indirizzo email non può ricevere campagne, aggiungilo al contatto.';
         }
 
         if ($contact->isEmailSuppressed()) {
-            return 'L\'indirizzo è bloccato ('.self::suppressionReason($contact->emailSuppressionReason).'): nessuna campagna lo raggiunge finché non lo sblocchi.';
+            $when = $contact->emailSuppressedAt === null ? '' : ' il '.$contact->emailSuppressedAt->isoFormat('D MMM YYYY');
+
+            return 'Non riceve: l\'indirizzo è bloccato'.$when.' ('.self::suppressionReason($contact->emailSuppressionReason).'). Nessuna campagna lo raggiunge finché non lo sblocchi.';
         }
 
         if (! $contact->emailConsent) {
-            return 'Non ha dato il consenso alle email di marketing: nessuna campagna lo raggiunge finché non lo registri.';
+            return 'Non riceve: non ha dato il consenso alle email di marketing. Nessuna campagna lo raggiunge finché non lo registri.';
         }
 
-        return 'Riceverà la prossima campagna rivolta ai contatti con ruolo '.self::roles($contact).'.';
+        return 'Riceve le campagne: riceverà la prossima campagna rivolta ai contatti con ruolo '.self::roles($contact).'.';
     }
 
     private static function roles(ContactData $contact): string

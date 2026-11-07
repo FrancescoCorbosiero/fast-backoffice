@@ -7,11 +7,13 @@ namespace App\Modules\Cash\Filament\Resources\Accounts;
 use App\Kernel\Money\Money;
 use App\Modules\Cash\Enums\AccountType;
 use App\Modules\Cash\Filament\Components\Amounts;
+use App\Modules\Cash\Filament\Pages\StatementPage;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Modules\Cash\Models\Account;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -76,12 +78,30 @@ class AccountResource extends Resource
                 TextColumn::make('name')->label('Nome')->weight('bold')->searchable(),
                 TextColumn::make('type')->label('Tipo')->formatStateUsing(fn (AccountType $state): string => $state->label()),
                 TextColumn::make('balance')->label('Saldo')->alignEnd()
-                    ->state(fn (Account $record): string => Amounts::format($record->openingBalance()->plus(new Money(self::movementsBalance($record), $record->currency)))),
+                    ->state(fn (Account $record): string => Amounts::format($record->openingBalance()->plus(new Money(self::movementsBalance($record), $record->currency))))
+                    ->url(fn (Account $record): string => self::statementUrl($record->id)),
                 TextColumn::make('iban')->label('IBAN')->fontFamily('mono')->placeholder('—')->toggleable(),
                 IconColumn::make('is_active')->label('Attivo')->boolean(),
             ])
-            ->recordActions([EditAction::make()])
+            ->recordActions([self::statementAction(), EditAction::make()])
             ->paginated(false);
+    }
+
+    /**
+     * The account's statement for the current month. Built fresh on every
+     * call: an Action instance belongs to one Livewire component.
+     */
+    public static function statementAction(): Action
+    {
+        return Action::make('statement')
+            ->label('Estratto conto')
+            ->icon(Heroicon::OutlinedDocumentChartBar)
+            ->url(fn (Account $record): string => self::statementUrl($record->id));
+    }
+
+    public static function statementUrl(int $accountId): string
+    {
+        return StatementPage::getUrl(['account' => $accountId]);
     }
 
     private static function movementsBalance(Account $record): int

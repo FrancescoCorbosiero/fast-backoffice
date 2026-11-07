@@ -6,6 +6,7 @@ use App\Modules\Invoicing\Actions\ProcessPecMessage;
 use App\Modules\Invoicing\Actions\SendToSdi;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
 use App\Modules\Invoicing\Enums\PecMessageOutcome;
+use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\EditInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ViewInvoice;
 use App\Modules\Invoicing\Filament\Resources\PecMessages\Pages\ListPecMessages;
 use App\Modules\Invoicing\Filament\Resources\PecMessages\Pages\ViewPecMessage;
@@ -44,7 +45,8 @@ it('sends to SdI from the invoice page, then shows the outcome and the resend pa
     app(ProcessPecMessage::class)->process(new IncomingPecMessage('u1', PecFixtures::envelope('posta-certificata', [['IT01234567897_00001_NS_001.xml', PecFixtures::ns('IT01234567897_00001.xml', [['00404', 'Fattura duplicata']]), 'application/xml']])));
 
     $this->get("/admin/invoices/{$invoice->id}")->assertOk()->assertSee('Fattura duplicata')->assertSee('riemetti entro il');
-    $this->get("/admin/invoices/{$invoice->id}/edit")->assertOk();
+    $this->get("/admin/invoices/{$invoice->id}/edit")->assertOk()->assertSee('Riemetti corretta')->assertDontSee('Elimina bozza');
+    Livewire::test(EditInvoice::class, ['record' => $invoice->id])->assertActionHidden('delete')->assertActionVisible('back');
 
     Livewire::test(ViewInvoice::class, ['record' => $invoice->id])
         ->assertActionVisible('reissue')->assertActionVisible('void')
@@ -70,7 +72,26 @@ it('hides the send action when the channel is not configured', function (): void
     $this->mailbox->configured = false;
     $invoice = Studio::issued(Studio::client(), [Studio::line('Sito', '1000.00')]);
 
-    Livewire::test(ViewInvoice::class, ['record' => $invoice->id])->assertActionHidden('sendSdi')->assertActionVisible('sent');
+    Livewire::test(ViewInvoice::class, ['record' => $invoice->id])->assertActionHidden('sendSdi')->assertActionVisible('sent')
+        ->assertSee('non configurato')->assertSee('/admin/settings/sdi');
+});
+
+it('reworks a flagged message from its page once the cause is fixed', function (): void {
+    // SdI's receipt arrives before the outbox knows the file: flagged, then reworked once the invoice has been sent.
+    $orphan = app(ProcessPecMessage::class)->process(new IncomingPecMessage('u0', PecFixtures::envelope('posta-certificata', [['IT01234567897_00001_RC_001.xml', PecFixtures::rc('IT01234567897_00001.xml'), 'application/xml']])));
+    expect($orphan->outcome)->toBe(PecMessageOutcome::Review);
+
+    $invoice = Studio::issued(Studio::client(), [Studio::line('Sito', '1000.00')], '2026-03-10');
+    app(SendToSdi::class)->send($invoice->id);
+
+    Livewire::test(ViewPecMessage::class, ['record' => $orphan->id])
+        ->assertActionVisible('reprocess')->assertActionHidden('import')
+        ->callAction('reprocess')->assertNotified()
+        ->assertActionHidden('reprocess');
+
+    $message = PecMessage::query()->sole();
+    expect($message->outcome)->toBe(PecMessageOutcome::Processed)->and($message->invoice_id)->toBe($invoice->id)
+        ->and(Invoice::query()->findOrFail($invoice->id)->status)->toBe(InvoiceStatus::Delivered);
 });
 
 it('lists the PEC messages, reads the mailbox on demand and lets the owner resolve what needs review', function (): void {

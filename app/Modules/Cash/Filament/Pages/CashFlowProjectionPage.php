@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Cash\Filament\Pages;
 
+use App\Kernel\Reference;
+use App\Modules\Cash\Contributions\RecurringExpenseAllocationPresenter;
 use App\Modules\Cash\Data\ExpectedFlow;
 use App\Modules\Cash\Data\Projection;
+use App\Modules\Cash\Filament\Allocations;
 use App\Modules\Cash\Filament\Components\Amounts;
+use App\Modules\Cash\Filament\Components\LogRecurringExpenseAction;
+use App\Modules\Cash\Models\RecurringExpense;
 use App\Modules\Cash\Queries\CashFlowProjection;
 use BackedEnum;
 use Carbon\CarbonImmutable;
@@ -87,9 +92,16 @@ class CashFlowProjectionPage extends Page implements HasTable
                 TextColumn::make('date')->label('Data')->date('d/m/Y')
                     ->description(fn (array $record): ?string => ($record['overdue'] ?? false) === true ? 'in ritardo' : null)
                     ->color(fn (array $record): ?string => ($record['overdue'] ?? false) === true ? 'danger' : null),
-                TextColumn::make('description')->label('Voce')->wrap(),
-                TextColumn::make('source')->label('Origine')->badge(),
+                TextColumn::make('description')->label('Voce')->wrap()
+                    ->url(fn (array $record): ?string => self::rowUrl($record))
+                    ->icon(fn (array $record): ?Heroicon => self::rowUrl($record) === null ? null : Heroicon::ArrowTopRightOnSquare),
+                TextColumn::make('source_label')->label('Origine')->badge()->url(fn (array $record): ?string => self::rowUrl($record)),
                 TextColumn::make('amount')->label('Importo')->alignEnd()->color(fn (array $record): string => ($record['in'] ?? false) === true ? 'success' : 'danger'),
+            ])
+            ->recordActions([
+                LogRecurringExpenseAction::make(fn (mixed $record): ?RecurringExpense => is_array($record) ? self::expenseOf($record) : null)
+                    ->visible(fn (array $record): bool => ($record['source'] ?? null) === 'recurring_expense' && ($record['overdue'] ?? false) === true)
+                    ->after(fn () => $this->updatedMonths()),
             ])
             ->emptyStateHeading('Nessun movimento atteso')
             ->emptyStateDescription('Spese ricorrenti, fatture da incassare e rinnovi compariranno qui.')
@@ -109,13 +121,44 @@ class CashFlowProjectionPage extends Page implements HasTable
                 'date' => $flow->date->toDateString(),
                 'overdue' => $projection->isOverdue($flow),
                 'description' => $flow->description,
-                'source' => self::sourceLabel($flow),
+                'source' => $flow->source,
+                'source_label' => self::sourceLabel($flow),
+                'reference' => $flow->reference?->toString(),
                 'amount' => Amounts::format($flow->amount),
                 'in' => $flow->direction->sign() > 0,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * The document behind a row (invoice, schedule, domain, website),
+     * through the presenter its module registered.
+     *
+     * @param  array<array-key, mixed>  $record
+     */
+    private static function rowUrl(array $record): ?string
+    {
+        $reference = $record['reference'] ?? null;
+
+        return is_string($reference) ? Allocations::url(Reference::fromString($reference)) : null;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $record
+     */
+    private static function expenseOf(array $record): ?RecurringExpense
+    {
+        $reference = $record['reference'] ?? null;
+
+        if (! is_string($reference) || ! str_starts_with($reference, 'recurring_expense:')) {
+            return null;
+        }
+
+        [$id] = RecurringExpenseAllocationPresenter::parts(Reference::fromString($reference));
+
+        return RecurringExpense::query()->find($id);
     }
 
     private function projection(): Projection

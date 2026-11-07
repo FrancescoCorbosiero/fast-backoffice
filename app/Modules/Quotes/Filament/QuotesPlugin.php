@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quotes\Filament;
 
 use App\Modules\Quotes\Filament\Resources\Quotes\QuoteResource;
+use App\Modules\Quotes\Filament\Widgets\QuotesOverviewWidget;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 
@@ -17,7 +18,7 @@ class QuotesPlugin implements Plugin
 
     public function register(Panel $panel): void
     {
-        $panel->resources([QuoteResource::class]);
+        $panel->resources([QuoteResource::class])->widgets([QuotesOverviewWidget::class]);
     }
 
     public function boot(Panel $panel): void {}

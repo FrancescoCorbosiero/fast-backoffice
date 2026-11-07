@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Cash\Filament\Resources\RecurringExpenses;
 
 use App\Kernel\Dates\Frequency;
-use App\Modules\Cash\Actions\LogRecurringExpense;
 use App\Modules\Cash\Enums\Direction;
 use App\Modules\Cash\Filament\Components\Amounts;
+use App\Modules\Cash\Filament\Components\LogRecurringExpenseAction;
 use App\Modules\Cash\Filament\Resources\Movements\MovementResource;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages\CreateRecurringExpense;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages\EditRecurringExpense;
@@ -18,24 +18,23 @@ use App\Modules\Contacts\Enums\ContactRole;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use BackedEnum;
 use Carbon\CarbonImmutable;
-use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Validation\ValidationException;
 use UnitEnum;
 
 class RecurringExpenseResource extends Resource
@@ -91,31 +90,13 @@ class RecurringExpenseResource extends Resource
                 TextColumn::make('account.name')->label('Conto')->placeholder('—'),
                 IconColumn::make('is_active')->label('Attiva')->boolean(),
             ])
+            ->filters([
+                Filter::make('overdue')->label('In ritardo')->toggle()->query(fn (Builder $query): Builder => self::overdue($query)),
+                TernaryFilter::make('is_active')->label('Attiva')->default(true),
+            ])
             ->recordActions([
-                Action::make('log')
-                    ->label('Registra pagamento')
-                    ->icon(Heroicon::OutlinedCheck)
-                    ->visible(fn (RecurringExpense $record): bool => $record->is_active)
-                    ->fillForm(fn (RecurringExpense $record): array => ['paid_on' => $record->next_due_on->toDateString(), 'account_id' => $record->account_id])
-                    ->schema([
-                        DatePicker::make('paid_on')->label('Pagata il')->required(),
-                        Select::make('account_id')->label('Dal conto')->options(fn (): array => app(Accounts::class)->options())->required(),
-                    ])
-                    ->action(function (RecurringExpense $record, array $data): void {
-                        try {
-                            $movement = app(LogRecurringExpense::class)->log(
-                                $record->id,
-                                is_string($data['paid_on'] ?? null) ? CarbonImmutable::parse($data['paid_on']) : null,
-                                is_numeric($data['account_id'] ?? null) ? (int) $data['account_id'] : null,
-                            );
-                        } catch (ValidationException $exception) {
-                            Notification::make()->title('Pagamento non registrato')->body(implode(' ', $exception->validator->errors()->all()))->danger()->send();
-
-                            return;
-                        }
-
-                        Notification::make()->title('Pagamento registrato')->body($movement->description.': '.Amounts::format($movement->amount))->success()->send();
-                    }),
+                LogRecurringExpenseAction::make(fn (mixed $record): ?RecurringExpense => $record instanceof RecurringExpense ? $record : null)
+                    ->visible(fn (RecurringExpense $record): bool => $record->is_active),
                 EditAction::make(),
             ])
             ->paginated([25, 50]);
@@ -124,6 +105,31 @@ class RecurringExpenseResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with('account');
+    }
+
+    /**
+     * The overdue schedules, counted in the sidebar so they are seen before
+     * the list is opened.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $count = self::overdue(RecurringExpense::query())->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'danger';
+    }
+
+    /**
+     * @param  Builder<RecurringExpense>  $query
+     * @return Builder<RecurringExpense>
+     */
+    private static function overdue(Builder $query): Builder
+    {
+        return $query->active()->where('next_due_on', '<', CarbonImmutable::today()->toDateString());
     }
 
     public static function canDelete(Model $record): bool

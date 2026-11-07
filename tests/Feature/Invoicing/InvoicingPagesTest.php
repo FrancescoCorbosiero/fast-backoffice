@@ -3,15 +3,22 @@
 declare(strict_types=1);
 
 use App\Modules\Cash\Models\Movement;
+use App\Modules\Invoicing\Actions\RebuildPaidAmounts;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
+use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\CreateInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ViewInvoice;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\CreatePaymentRequest;
+use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\ListPaymentRequests;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\ViewPaymentRequest;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\Pages\ListRecurringInvoices;
+use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\RecurringInvoiceResource;
 use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\Pages\ListSupplierInvoices;
+use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\Pages\ViewSupplierInvoice;
+use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\SupplierInvoiceResource;
 use App\Modules\Invoicing\Filament\Widgets\ContactInvoicesTable;
 use App\Modules\Invoicing\Models\Invoice;
+use App\Modules\Invoicing\Models\PaymentRequest;
 use App\Modules\Invoicing\Models\RecurringInvoice;
 use App\Modules\Invoicing\Models\SupplierInvoice;
 use Illuminate\Http\UploadedFile;
@@ -59,6 +66,12 @@ it('creates a draft from the form, issues it, records a payment and marks it sen
         ->assertNotified();
     expect($invoice->refresh()->paid_cents)->toBe(100_000)->and(Movement::query()->count())->toBe(1);
 
+    // The customer leads to their page; each payment says where it landed and can be removed on the spot.
+    $this->get("/admin/invoices/{$invoice->id}")->assertOk()
+        ->assertSee("/admin/contacts/{$client->id}")
+        ->assertSee('sul conto '.$account->name)
+        ->assertSee('Rimuovi');
+
     Livewire::test(ViewInvoice::class, ['record' => $invoice->id])
         ->callAction('sent', ['sent_on' => '2026-03-13'])
         ->assertNotified();
@@ -66,6 +79,35 @@ it('creates a draft from the form, issues it, records a payment and marks it sen
 
     Livewire::test(ViewInvoice::class, ['record' => $invoice->id])->callAction('creditNote')->assertRedirect();
     expect(Invoice::query()->count())->toBe(2);
+
+    // The invoice now shows its storno and does not offer a second one.
+    Livewire::test(ViewInvoice::class, ['record' => $invoice->id])
+        ->assertSee('Stornata da')
+        ->assertSee('Nota di credito (bozza)')
+        ->assertActionHidden('creditNote');
+});
+
+it('offers a reminder to the customer when the invoice is overdue', function (): void {
+    $client = Studio::client(['email' => 'conti@bellavista.test']);
+    $invoice = Studio::issued($client, [Studio::line('Sito', '1000.00')], '2026-01-10');
+
+    $component = Livewire::test(ViewInvoice::class, ['record' => $invoice->id])->assertSee('Scaduta')->assertActionVisible('remind');
+    $url = $component->instance()->getAction('remind')?->getUrl();
+
+    expect($url)->toStartWith('mailto:conti@bellavista.test?subject=')->toContain(rawurlencode('Sollecito di pagamento: Fattura 1/2026'));
+});
+
+it('flags overdue payment requests in the list and filters them', function (): void {
+    $client = Studio::client();
+    $overdue = app(App\Modules\Invoicing\Actions\CreatePaymentRequest::class)->create(App\Modules\Invoicing\Data\DraftInput::fromArray(['contact_id' => $client->id, 'lines' => [Studio::line('Acconto', '300.00')], 'payment_terms_days' => 0]), Carbon\CarbonImmutable::parse('2026-03-01'));
+    $open = app(App\Modules\Invoicing\Actions\CreatePaymentRequest::class)->create(App\Modules\Invoicing\Data\DraftInput::fromArray(['contact_id' => $client->id, 'lines' => [Studio::line('Saldo', '300.00')], 'payment_terms_days' => 30]));
+
+    Livewire::test(ListPaymentRequests::class)
+        ->assertSee('scaduta')
+        ->assertSee("/admin/contacts/{$client->id}")
+        ->filterTable('overdue', true)
+        ->assertCanSeeTableRecords([PaymentRequest::query()->findOrFail($overdue->id)])
+        ->assertCanNotSeeTableRecords([PaymentRequest::query()->findOrFail($open->id)]);
 });
 
 it('shows validation errors instead of issuing when the customer is incomplete', function (): void {
@@ -100,7 +142,16 @@ it('issues a recurring invoice from the list', function (): void {
 
     Livewire::test(ListRecurringInvoices::class)->callTableAction('issue', $schedule)->assertNotified();
 
-    expect(Invoice::query()->count())->toBe(1)->and($schedule->refresh()->next_issue_on->toDateString())->toBe('2026-04-01');
+    $invoice = Invoice::query()->sole();
+    expect($invoice->recurring_invoice_id)->toBe($schedule->id)->and($schedule->refresh()->next_issue_on->toDateString())->toBe('2026-04-01');
+
+    // The schedule says whose it is and leads to what it generated; the invoice leads back.
+    Livewire::test(ListRecurringInvoices::class)
+        ->assertSee('Pasticceria Bellavista S.r.l.')
+        ->assertTableActionVisible('invoices', $schedule)
+        ->assertTableActionHasUrl('invoices', RecurringInvoiceResource::invoicesUrl($schedule->id), $schedule);
+    $this->get(RecurringInvoiceResource::invoicesUrl($schedule->id))->assertOk()->assertSee('Canone sito');
+    $this->get("/admin/invoices/{$invoice->id}")->assertOk()->assertSee('Fattura ricorrente')->assertSee("/admin/recurring-invoices/{$schedule->id}/edit");
 });
 
 it('imports uploaded FatturaPA files from the supplier invoices list', function (): void {
@@ -117,7 +168,20 @@ it('imports uploaded FatturaPA files from the supplier invoices list', function 
 
     $imported = SupplierInvoice::query()->sole();
     expect($imported->total_cents)->toBe(6_100)->and($imported->supplier_name)->toBe('Hosting Srl');
-    $this->get("/admin/supplier-invoices/{$imported->id}")->assertOk()->assertSee('Hosting Srl');
+    $this->get("/admin/supplier-invoices/{$imported->id}")->assertOk()->assertSee('Hosting Srl')->assertSee("/admin/contacts/{$imported->contact_id}")->assertSee('Nessun pagamento registrato');
+
+    // Paying it is one outgoing movement; the payable closes and the rebuild agrees.
+    $account = Studio::account();
+    Livewire::test(ViewSupplierInvoice::class, ['record' => $imported->id])
+        ->callAction('payment', ['amount' => '61', 'paid_on' => '2026-03-12', 'account_id' => $account->id])
+        ->assertNotified()
+        ->assertActionHidden('payment');
+    $this->get("/admin/supplier-invoices/{$imported->id}")->assertOk()->assertSee('dal conto '.$account->name);
+    expect($imported->refresh()->paid_cents)->toBe(6_100)
+        ->and(Movement::query()->sole()->direction->value)->toBe('out')
+        ->and(app(RebuildPaidAmounts::class)->rebuild())->toBe(0);
+
+    $this->get(SupplierInvoiceResource::unpaidUrl())->assertOk()->assertDontSee('Hosting Srl');
 });
 
 it('shows the invoices on the contact page and the overview on the dashboard', function (): void {
@@ -127,7 +191,13 @@ it('shows the invoices on the contact page and the overview on the dashboard', f
     $this->get("/admin/contacts/{$client->id}")->assertOk()->assertSee('Fatture');
     Livewire::test(ContactInvoicesTable::class, ['contactId' => $client->id])->assertSee('1/2026');
     $this->get('/admin')->assertOk();
-    Livewire::test(App\Modules\Invoicing\Filament\Widgets\InvoicingOverviewWidget::class)->assertSee('Fatture da inviare a SdI')->assertSee('la prima scade tra 7 giorni');
+    Livewire::test(App\Modules\Invoicing\Filament\Widgets\InvoicingOverviewWidget::class)
+        ->assertSee('Fatture da inviare a SdI')->assertSee('la prima scade tra 7 giorni')
+        ->assertSee('Da pagare ai fornitori')
+        ->assertSee(InvoiceResource::paymentFilterUrl(InvoiceResource::FILTER_OVERDUE))
+        ->assertSee(SupplierInvoiceResource::unpaidUrl());
+    $this->get(InvoiceResource::paymentFilterUrl(InvoiceResource::FILTER_OUTSTANDING))->assertOk()->assertSee('1/2026');
+    $this->get(InvoiceResource::paymentFilterUrl(InvoiceResource::FILTER_OVERDUE))->assertOk()->assertDontSee('1/2026');
 });
 
 it('offers to bill the contact from the invoices section, prefilling the create forms with the client', function (): void {

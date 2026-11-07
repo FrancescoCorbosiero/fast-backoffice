@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ?CarbonImmutable $delivered_at
  * @property ?CarbonImmutable $bounced_at
  * @property ?CarbonImmutable $unsubscribed_at
+ * @property-read ?Campaign $campaign
  */
 class CampaignRecipient extends Model
 {

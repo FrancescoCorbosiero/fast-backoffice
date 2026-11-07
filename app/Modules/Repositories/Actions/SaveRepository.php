@@ -11,6 +11,8 @@ use App\Modules\Repositories\Enums\RepositoryProvider;
 use App\Modules\Repositories\Models\Repository;
 use App\Modules\Repositories\Support\GitUrl;
 use App\Modules\Websites\Queries\Websites;
+use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,6 +22,7 @@ use Illuminate\Validation\ValidationException;
 final readonly class SaveRepository
 {
     public function __construct(
+        private ConnectionInterface $db,
         private FindContact $contacts,
         private Websites $websites,
     ) {}
@@ -46,9 +49,25 @@ final readonly class SaveRepository
         return $repository->toData();
     }
 
+    /**
+     * A repository a website's pipeline is built from stays: the database
+     * restricts the delete (Pipeline is a layer above, so this is the only
+     * way to know) and the owner is told what to do first. Its own
+     * transaction, so the refused statement leaves an enclosing one usable.
+     *
+     * @throws ValidationException
+     */
     public function delete(int $repositoryId): void
     {
-        Repository::query()->whereKey($repositoryId)->delete();
+        try {
+            $this->db->transaction(fn () => Repository::query()->whereKey($repositoryId)->delete());
+        } catch (QueryException $exception) {
+            if ($exception->getCode() !== '23503') {
+                throw $exception;
+            }
+
+            throw ValidationException::withMessages(['repository' => 'Scollega prima il repository dalla pipeline del sito.']);
+        }
     }
 
     /**

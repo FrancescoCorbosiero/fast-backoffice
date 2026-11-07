@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Cash;
 
+use App\Modules\Cash\Contracts\AllocationPresenter;
 use App\Modules\Cash\Contracts\CashFlowSchedule;
 use App\Modules\Cash\Contributions\MovementsContactPanel;
+use App\Modules\Cash\Contributions\RecurringExpenseAllocationPresenter;
 use App\Modules\Cash\Contributions\RecurringExpensesSchedule;
 use App\Modules\Cash\Filament\CashPlugin;
 use App\Modules\Cash\Listeners\RepointMergedContact;
@@ -31,6 +33,7 @@ class CashServiceProvider extends ModuleServiceProvider
         parent::register();
 
         $this->app->tag([RecurringExpensesSchedule::class], CashFlowSchedule::TAG);
+        $this->app->tag([RecurringExpenseAllocationPresenter::class], AllocationPresenter::TAG);
         $this->app->tag([MovementsContactPanel::class], ContactPanel::TAG);
     }
 

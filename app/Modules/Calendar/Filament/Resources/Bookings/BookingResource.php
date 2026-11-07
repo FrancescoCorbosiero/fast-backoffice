@@ -8,6 +8,7 @@ use App\Modules\Calendar\Enums\BookingStatus;
 use App\Modules\Calendar\Filament\Resources\Bookings\Pages\ListBookings;
 use App\Modules\Calendar\Filament\Resources\Bookings\Pages\ViewBooking;
 use App\Modules\Calendar\Models\Booking;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use BackedEnum;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
@@ -47,7 +48,10 @@ class BookingResource extends Resource
             ->columns([
                 TextColumn::make('starts_at')->label('Quando')->dateTime('d/m/Y H:i')->sortable(),
                 TextColumn::make('title')->label('Titolo')->weight('bold')->searchable(),
-                TextColumn::make('attendee_name')->label('Con')->placeholder('—')->searchable()->description(fn (Booking $record): ?string => $record->attendee_email),
+                TextColumn::make('attendee_name')->label('Con')->placeholder('—')->searchable()->description(fn (Booking $record): ?string => $record->attendee_email)
+                    ->url(fn (Booking $record): ?string => $record->contact_id !== null ? ContactLink::url($record->contact_id) : null)
+                    ->icon(fn (Booking $record): ?Heroicon => $record->contact_id === null ? Heroicon::OutlinedUserPlus : null)->iconColor('warning')
+                    ->tooltip(fn (Booking $record): string => $record->contact_id === null ? 'Nessun contatto collegato' : 'Apri il contatto'),
                 TextColumn::make('event_type')->label('Tipo')->placeholder('—'),
                 TextColumn::make('status')->label('Stato')->badge()->formatStateUsing(fn (BookingStatus $state): string => $state->label())->color(fn (BookingStatus $state): string => $state->color()),
             ])
@@ -55,9 +59,28 @@ class BookingResource extends Resource
                 SelectFilter::make('status')->label('Stato')->options(BookingStatus::options()),
                 Filter::make('upcoming')->label('Prossimi')->default()
                     ->query(fn (Builder $query): Builder => $query->where('starts_at', '>=', Date::now())->whereIn('status', [BookingStatus::Accepted->value, BookingStatus::Pending->value])),
+                Filter::make('unlinked')->label('Senza contatto')
+                    ->query(fn (Builder $query): Builder => $query->whereNull('contact_id')),
             ])
             ->recordActions([ViewAction::make()])
+            ->emptyStateHeading('Nessun appuntamento')
+            ->emptyStateDescription('Gli appuntamenti arrivano da Cal.com, via webhook e sincronizzazione oraria.')
             ->paginated([25, 50]);
+    }
+
+    /**
+     * Cal.com's own interface, where bookings are made and changed.
+     */
+    public static function calComAppUrl(): string
+    {
+        $url = config('calcom.app_url');
+
+        return rtrim(is_string($url) && $url !== '' ? $url : 'https://app.cal.com', '/');
+    }
+
+    public static function calComBookingUrl(string $uid): string
+    {
+        return static::calComAppUrl().'/booking/'.rawurlencode($uid);
     }
 
     public static function canCreate(): bool

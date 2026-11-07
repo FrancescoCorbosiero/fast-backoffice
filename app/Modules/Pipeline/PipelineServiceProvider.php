@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline;
 
+use App\Modules\Contacts\Contracts\ContactPanel;
 use App\Modules\Contacts\Events\ContactsMerged;
 use App\Modules\Pipeline\Auth\ClientUserProvider;
+use App\Modules\Pipeline\Contributions\ChangeRequestsContactPanel;
+use App\Modules\Pipeline\Contributions\PipelineWebsitePanel;
 use App\Modules\Pipeline\Filament\PipelinePlugin;
 use App\Modules\Pipeline\Http\Portal\RequestsController;
 use App\Modules\Pipeline\Http\Portal\SignInController;
@@ -16,6 +19,7 @@ use App\Modules\Pipeline\Listeners\RepointMergedContact;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Policies\ChangeRequestPolicy;
 use App\Modules\Scheduling\Contracts\ScheduledJob;
+use App\Modules\Websites\Contracts\WebsitePanel;
 use App\Support\ModuleServiceProvider;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Contracts\Foundation\Application;
@@ -43,6 +47,8 @@ class PipelineServiceProvider extends ModuleServiceProvider
 
         $this->app->bind(CommandRunner::class, SymfonyCommandRunner::class);
         $this->app->tag([DeployApprovedRequests::class], ScheduledJob::TAG);
+        $this->app->tag([ChangeRequestsContactPanel::class], ContactPanel::TAG);
+        $this->app->tag([PipelineWebsitePanel::class], WebsitePanel::TAG);
     }
 
     public function boot(): void

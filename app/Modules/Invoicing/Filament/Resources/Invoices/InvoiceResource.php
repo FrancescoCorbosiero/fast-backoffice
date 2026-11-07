@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Invoicing\Filament\Resources\Invoices;
 
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Invoicing\Enums\DocumentType;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
@@ -15,6 +16,7 @@ use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\EditInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ListInvoices;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ViewInvoice;
 use App\Modules\Invoicing\Models\Invoice;
+use App\Modules\Invoicing\Models\RecurringInvoice;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Actions\EditAction;
@@ -51,6 +53,10 @@ class InvoiceResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'number_text';
 
+    public const string FILTER_OUTSTANDING = 'outstanding';
+
+    public const string FILTER_OVERDUE = 'overdue';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -72,7 +78,7 @@ class InvoiceResource extends Resource
             ->columns([
                 TextColumn::make('number_text')->label('Numero')->weight('bold')->placeholder('bozza')->searchable(),
                 TextColumn::make('type')->label('Tipo')->formatStateUsing(fn (DocumentType $state): string => $state->label()),
-                TextColumn::make('customer_name')->label('Cliente')->searchable(),
+                TextColumn::make('customer_name')->label('Cliente')->searchable()->url(fn (Invoice $record): string => ContactLink::url($record->contact_id)),
                 TextColumn::make('issued_on')->label('Data')->date('d/m/Y')->sortable()->placeholder('—'),
                 TextColumn::make('total_cents')->label('Totale')->alignEnd()->formatStateUsing(fn (Invoice $record): string => $record->toData()->total->format()),
                 TextColumn::make('status')->label('Stato')->badge()->formatStateUsing(fn (InvoiceStatus $state): string => $state->label())->color(fn (InvoiceStatus $state): string => $state->color()),
@@ -87,12 +93,41 @@ class InvoiceResource extends Resource
             ->filters([
                 SelectFilter::make('status')->label('Stato')->options(InvoiceStatus::options()),
                 SelectFilter::make('type')->label('Tipo')->options([DocumentType::Invoice->value => 'Fatture', DocumentType::CreditNote->value => 'Note di credito']),
+                SelectFilter::make('payment')->label('Incasso')
+                    ->options([self::FILTER_OUTSTANDING => 'Da incassare', self::FILTER_OVERDUE => 'Scadute'])
+                    ->query(fn (Builder $query, array $data): Builder => self::applyPaymentFilter($query, $data['value'] ?? null, $today)),
+                SelectFilter::make('recurring_invoice_id')->label('Fattura ricorrente')
+                    ->options(fn (): array => RecurringInvoice::query()->orderBy('name')->pluck('name', 'id')->all()),
             ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make()->visible(fn (Invoice $record): bool => ! $record->status->isIssued()),
             ])
             ->paginated([25, 50, 100]);
+    }
+
+    /**
+     * The list filtered the way a dashboard figure counts: open invoices,
+     * or the ones past their due date.
+     */
+    public static function paymentFilterUrl(string $filter): string
+    {
+        return static::getUrl('index', ['filters' => ['payment' => ['value' => $filter]]]);
+    }
+
+    /**
+     * @param  Builder<Invoice>  $query
+     * @return Builder<Invoice>
+     */
+    private static function applyPaymentFilter(Builder $query, mixed $value, CarbonImmutable $today): Builder
+    {
+        if ($value !== self::FILTER_OUTSTANDING && $value !== self::FILTER_OVERDUE) {
+            return $query;
+        }
+
+        $query->outstanding()->where('type', DocumentType::Invoice->value);
+
+        return $value === self::FILTER_OVERDUE ? $query->whereDate('due_on', '<', $today->toDateString()) : $query;
     }
 
     public static function canEdit(Model $record): bool

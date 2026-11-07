@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leads\Filament\Widgets;
 
 use App\Modules\Leads\Enums\LeadStatus;
+use App\Modules\Leads\Filament\Resources\Leads\LeadResource;
 use App\Modules\Leads\Queries\Leads;
 use Carbon\CarbonImmutable;
 use Filament\Widgets\StatsOverviewWidget;
@@ -26,11 +27,14 @@ class LeadsPipelineWidget extends StatsOverviewWidget
 
         return [
             Stat::make('Lead aperti', (string) $open)
-                ->description(sprintf('%d nuovi · %d contattati · %d qualificati', $pipeline[LeadStatus::New->value], $pipeline[LeadStatus::Contacted->value], $pipeline[LeadStatus::Qualified->value])),
+                ->description(sprintf('%d nuovi · %d contattati · %d qualificati', $pipeline[LeadStatus::New->value], $pipeline[LeadStatus::Contacted->value], $pipeline[LeadStatus::Qualified->value]))
+                ->url(LeadResource::getUrl('index')),
             Stat::make('Da ricontattare', (string) count($due))
                 ->description($due === [] ? 'nessuno in ritardo' : implode(', ', array_slice(array_map(fn ($l): string => $l->name, $due), 0, 3)))
-                ->color($due === [] ? 'success' : 'warning'),
-            Stat::make('Vinti / persi', $pipeline[LeadStatus::Won->value].' / '.$pipeline[LeadStatus::Lost->value]),
+                ->color($due === [] ? 'success' : 'warning')
+                ->url(count($due) === 1 ? LeadResource::getUrl('view', ['record' => $due[0]->id]) : LeadResource::getUrl('index', ['filters' => ['due' => ['isActive' => true]]])),
+            Stat::make('Vinti / persi', $pipeline[LeadStatus::Won->value].' / '.$pipeline[LeadStatus::Lost->value])
+                ->url(LeadResource::getUrl('index', ['filters' => ['closed' => ['isActive' => true]]])),
         ];
     }
 }

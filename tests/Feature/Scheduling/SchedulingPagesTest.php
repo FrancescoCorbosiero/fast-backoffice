@@ -7,6 +7,7 @@ use App\Modules\Scheduling\Data\JobResult;
 use App\Modules\Scheduling\Enums\RunTrigger;
 use App\Modules\Scheduling\Filament\Pages\JobsPage;
 use App\Modules\Scheduling\Filament\Resources\JobRuns\Pages\ListJobRuns;
+use App\Modules\Scheduling\Filament\Resources\JobRuns\Pages\ViewJobRun;
 use App\Modules\Scheduling\Models\JobRun;
 use App\Modules\Scheduling\Queries\ListJobs;
 use Livewire\Livewire;
@@ -24,6 +25,8 @@ it('lists the jobs and runs one now', function (): void {
 
     Livewire::test(JobsPage::class)
         ->assertSee('tests.page')
+        ->assertTableActionExists('history')
+        ->assertActionExists('runs')
         ->callTableAction('run', 'tests.page')
         ->assertNotified();
 
@@ -58,4 +61,30 @@ it('shows the run history', function (): void {
     $this->get("/admin/system/job-runs/{$run->id}")->assertOk()->assertSee('it broke');
 
     Livewire::test(ListJobRuns::class)->assertCanSeeTableRecords(JobRun::all());
+});
+
+it('filters the history by operation and outcome, and runs a job again from one of its runs', function (): void {
+    $broken = new FakeJob('tests.broken', fn (): JobResult => JobResult::failure('it broke', 4));
+    registerJobs([$broken, FakeJob::succeeding('tests.fine')]);
+    $failed = app(RunJob::class)->run('tests.broken', RunTrigger::Scheduler);
+    $fine = app(RunJob::class)->run('tests.fine', RunTrigger::Scheduler);
+
+    Livewire::test(ListJobRuns::class)
+        ->assertSee('Fake job tests.broken')
+        ->filterTable('job_key', 'tests.broken')
+        ->assertCanSeeTableRecords(JobRun::query()->whereKey($failed->id)->get())
+        ->assertCanNotSeeTableRecords(JobRun::query()->whereKey($fine->id)->get())
+        ->resetTableFilters()
+        ->filterTable('failed', true)
+        ->assertCanSeeTableRecords(JobRun::query()->whereKey($failed->id)->get())
+        ->assertCanNotSeeTableRecords(JobRun::query()->whereKey($fine->id)->get());
+
+    Livewire::test(ViewJobRun::class, ['record' => $failed->id])
+        ->assertActionExists('jobs')
+        ->callAction('rerun')
+        ->assertNotified();
+
+    expect($broken->runs)->toBe(2)
+        ->and(JobRun::query()->where('job_key', 'tests.broken')->count())->toBe(2)
+        ->and(App\Modules\Scheduling\Filament\Resources\JobRuns\JobRunResource::shouldRegisterNavigation())->toBeFalse();
 });

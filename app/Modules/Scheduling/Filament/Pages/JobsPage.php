@@ -8,6 +8,7 @@ use App\Modules\Scheduling\Actions\OverrideJob;
 use App\Modules\Scheduling\Actions\RunJob;
 use App\Modules\Scheduling\Data\JobData;
 use App\Modules\Scheduling\Enums\RunTrigger;
+use App\Modules\Scheduling\Filament\Resources\JobRuns\JobRunResource;
 use App\Modules\Scheduling\Queries\ListJobs;
 use BackedEnum;
 use Closure;
@@ -52,6 +53,17 @@ class JobsPage extends Page implements HasTable
         return $schema->components([EmbeddedTable::make()]);
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('runs')
+                ->label('Tutte le esecuzioni')
+                ->icon(Heroicon::OutlinedQueueList)
+                ->color('gray')
+                ->url(JobRunResource::getUrl()),
+        ];
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -62,7 +74,8 @@ class JobsPage extends Page implements HasTable
                 TextColumn::make('cron')->label('Pianificazione')->fontFamily('mono')
                     ->description(fn (array $record): ?string => self::bool($record, 'overridden') ? 'predefinita: '.self::string($record, 'default_cron') : null),
                 IconColumn::make('enabled')->label('Attiva')->boolean(),
-                TextColumn::make('last_run_at')->label('Ultima esecuzione')->dateTime('d/m/Y H:i')->placeholder('mai'),
+                TextColumn::make('last_run_at')->label('Ultima esecuzione')->dateTime('d/m/Y H:i')->placeholder('mai')
+                    ->url(fn (array $record): string => self::historyUrl($record)),
                 TextColumn::make('last_exit_code')->label('Esito')
                     ->state(fn (array $record): string => match ($record['last_exit_code'] ?? null) {
                         null => isset($record['last_run_at']) ? 'in corso' : '—',
@@ -74,7 +87,8 @@ class JobsPage extends Page implements HasTable
                         0 => 'success',
                         default => 'danger',
                     })
-                    ->badge(),
+                    ->badge()
+                    ->url(fn (array $record): string => self::historyUrl($record)),
             ])
             ->recordActions([
                 Action::make('run')
@@ -84,9 +98,16 @@ class JobsPage extends Page implements HasTable
                     ->modalDescription('L\'operazione viene eseguita subito, in questa richiesta.')
                     ->action(function (array $record): void {
                         $run = app(RunJob::class)->run(self::string($record, 'key'), RunTrigger::Manual);
-                        $notification = Notification::make()->title($run->succeeded() ? 'Eseguita' : 'Terminata con errore')->body($run->output);
+                        $notification = Notification::make()
+                            ->title($run->succeeded() ? 'Eseguita' : 'Terminata con errore')
+                            ->body($run->output)
+                            ->actions([Action::make('open')->label('Apri')->url(JobRunResource::getUrl('view', ['record' => $run->id]))]);
                         $run->succeeded() ? $notification->success()->send() : $notification->danger()->send();
                     }),
+                Action::make('history')
+                    ->label('Storico')
+                    ->icon(Heroicon::OutlinedQueueList)
+                    ->url(fn (array $record): string => self::historyUrl($record)),
                 Action::make('toggle')
                     ->label(fn (array $record): string => self::bool($record, 'enabled') ? 'Sospendi' : 'Riattiva')
                     ->icon(fn (array $record): Heroicon => self::bool($record, 'enabled') ? Heroicon::OutlinedPause : Heroicon::OutlinedPlayCircle)
@@ -117,6 +138,16 @@ class JobsPage extends Page implements HasTable
                     }),
             ])
             ->paginated(false);
+    }
+
+    /**
+     * The run history filtered on this job.
+     *
+     * @param  array<array-key, mixed>  $record
+     */
+    private static function historyUrl(array $record): string
+    {
+        return JobRunResource::getUrl('index', ['filters' => ['job_key' => ['value' => self::string($record, 'key')]]]);
     }
 
     /**

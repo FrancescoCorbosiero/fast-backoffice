@@ -9,6 +9,7 @@ use App\Modules\Settings\Filament\Pages\InvoiceDefaultsPage;
 use App\Modules\Settings\Filament\Pages\MailSettingsPage;
 use App\Modules\Settings\Filament\Pages\NumberingSeriesPage;
 use App\Modules\Settings\Filament\Pages\SdiSettingsPage;
+use App\Modules\Settings\Filament\Widgets\SetupChecklistWidget;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 
@@ -27,7 +28,7 @@ class SettingsPlugin implements Plugin
             NumberingSeriesPage::class,
             SdiSettingsPage::class,
             MailSettingsPage::class,
-        ]);
+        ])->widgets([SetupChecklistWidget::class]);
     }
 
     public function boot(Panel $panel): void {}

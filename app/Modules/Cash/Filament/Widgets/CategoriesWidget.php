@@ -25,7 +25,7 @@ abstract class CategoriesWidget extends TableWidget
         return $table
             ->records(fn (): array => $this->rows())
             ->columns([
-                TextColumn::make('name')->label('Categoria'),
+                TextColumn::make('name')->label('Categoria')->url(fn (array $record): ?string => is_string($record['url'] ?? null) ? $record['url'] : null),
                 TextColumn::make('movements')->label('Movimenti')->alignEnd(),
                 TextColumn::make('total')->label('Totale')->alignEnd()->weight('bold'),
             ])
@@ -42,7 +42,7 @@ abstract class CategoriesWidget extends TableWidget
         $rows = [];
 
         foreach (app(Analytics::class)->byCategory($this->direction(), $today->startOfYear(), $today) as $index => $total) {
-            $rows['category-'.$index] = self::row($total);
+            $rows['category-'.$index] = $this->row($total, $today);
         }
 
         return $rows;
@@ -51,8 +51,13 @@ abstract class CategoriesWidget extends TableWidget
     /**
      * @return array<string, mixed>
      */
-    private static function row(CategoryTotal $total): array
+    private function row(CategoryTotal $total, CarbonImmutable $today): array
     {
-        return ['name' => $total->name, 'movements' => $total->movements, 'total' => Amounts::format($total->total)];
+        return [
+            'name' => $total->name,
+            'movements' => $total->movements,
+            'total' => Amounts::format($total->total),
+            'url' => $total->categoryId === null ? null : YearToDateWidget::movementsUrl($today, $this->direction(), $total->categoryId),
+        ];
     }
 }

@@ -9,6 +9,7 @@ use App\Modules\Quotes\Models\Quote;
 use App\Modules\Websites\Models\Website;
 use Filament\Facades\Filament;
 use Filament\Livewire\GlobalSearch;
+use Filament\Widgets\AccountWidget;
 use Livewire\Livewire;
 use Tests\Feature\Invoicing\Studio;
 
@@ -29,6 +30,14 @@ it('runs the panel as a single-page app with a collapsible sidebar and a keyboar
         ->and($panel->getGlobalSearchProvider())->not->toBeNull();
 
     $this->get('/admin')->assertOk()->assertSee('wire:navigate', escape: false);
+});
+
+it('keeps the dashboard for the modules\' widgets, without the account widget', function (): void {
+    $widgets = Filament::getPanel('admin')->getWidgets();
+
+    expect($widgets)->not->toBeEmpty()->not->toContain(AccountWidget::class);
+
+    $this->get('/admin')->assertOk()->assertDontSee('Bentornato')->assertDontSee('Welcome');
 });
 
 it('finds a contact by name, VAT number, tax code and city', function (): void {

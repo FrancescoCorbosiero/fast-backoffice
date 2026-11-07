@@ -18,11 +18,15 @@ use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 /**
- * Run history, read-only.
+ * Run history, read-only. Not in the menu: one journey, one entry. It's
+ * reached from Operazioni pianificate (a job's last run, "Storico",
+ * "Tutte le esecuzioni").
  */
 class JobRunResource extends Resource
 {
     protected static ?string $model = JobRun::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQueueList;
 

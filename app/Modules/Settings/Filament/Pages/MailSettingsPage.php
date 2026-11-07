@@ -8,6 +8,7 @@ use App\Modules\Settings\Actions\SaveMailSettings;
 use App\Modules\Settings\Data\MailSettings;
 use App\Modules\Settings\Queries\GetMailSettings;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
@@ -25,6 +26,21 @@ class MailSettingsPage extends SettingsPage
     protected static ?string $slug = 'settings/mail';
 
     protected static ?int $navigationSort = 5;
+
+    /**
+     * Once the sender is set, the next step is a campaign: Mail's screen
+     * sits above Settings, so this is a plain link, as the panel's URL.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('campaigns')
+                ->label('Campagne')
+                ->icon(Heroicon::OutlinedMegaphone)
+                ->color('gray')
+                ->url(url('/admin/campaigns')),
+        ];
+    }
 
     public function form(Schema $schema): Schema
     {

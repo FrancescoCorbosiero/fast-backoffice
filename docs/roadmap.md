@@ -117,6 +117,6 @@ The phases built the modules; this pass walks the screens as the owner does and 
 - [x] The website page: domains and repositories as sections (`WebsitePanel`), each with a create action prefilled with the website and its client
 - [x] The panel: SPA navigation, collapsible sidebar, unsaved-changes alerts, global search (⌘K) over contacts, websites, invoices, quotes, domains and leads
 
-- [ ] The rest of the screens: `docs/journeys-audit.md` lists every dead end found by walking them, by module, with a proposed fix each
+- [x] The rest of the screens: `docs/journeys-audit.md` lists every dead end found by walking them, by module; all fixed; three are marked *partly* where a cross-module link helper or contract is still missing
 
 Notes: no theme is compiled (the production image has no Node); the panel stays on Filament's own stylesheet with the amber accent. Repository addresses in git's SSH forms are accepted (the pipeline clones with a deploy key), and a modal that calls a use case shows the use case's validation errors on its fields (`App\Support\Filament\FormErrors`).

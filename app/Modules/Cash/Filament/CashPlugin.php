@@ -10,6 +10,7 @@ use App\Modules\Cash\Filament\Resources\Accounts\AccountResource;
 use App\Modules\Cash\Filament\Resources\Categories\CategoryResource;
 use App\Modules\Cash\Filament\Resources\Movements\MovementResource;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\RecurringExpenseResource;
+use App\Modules\Cash\Filament\Widgets\AccountBalancesWidget;
 use App\Modules\Cash\Filament\Widgets\ExpenseCategoriesWidget;
 use App\Modules\Cash\Filament\Widgets\IncomeCategoriesWidget;
 use App\Modules\Cash\Filament\Widgets\MonthlyTotalsChart;
@@ -38,6 +39,7 @@ class CashPlugin implements Plugin
                 StatementPage::class,
             ])
             ->widgets([
+                AccountBalancesWidget::class,
                 YearToDateWidget::class,
                 MonthlyTotalsChart::class,
                 IncomeCategoriesWidget::class,

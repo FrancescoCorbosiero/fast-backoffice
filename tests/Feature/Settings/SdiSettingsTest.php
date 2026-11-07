@@ -34,7 +34,7 @@ it('saves the addresses and switches, and refuses switches without a mailbox add
 it('is edited from its settings page', function (): void {
     signInAsOwner();
 
-    $this->get('/admin/settings/sdi')->assertOk()->assertSee('non configurato');
+    $this->get('/admin/settings/sdi')->assertOk()->assertSee('non configurato')->assertSee('In attesa dell\'indirizzo definitivo di SdI')->assertSee('Casella PEC');
 
     Livewire::test(SdiSettingsPage::class)
         ->fillForm(['pec_address' => 'studio@pec.test', 'sdi_address' => SdiSettings::FIRST_SDI_ADDRESS, 'auto_send' => false, 'inbox_enabled' => true])

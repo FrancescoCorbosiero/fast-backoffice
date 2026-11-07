@@ -10,7 +10,9 @@ use App\Modules\Cash\Filament\Components\Amounts;
 use App\Modules\Cash\Queries\Accounts;
 use App\Modules\Cash\Queries\Categories;
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
+use App\Modules\Contacts\Queries\FindContact;
 use App\Modules\Websites\Enums\WebsiteStatus;
 use App\Modules\Websites\Filament\Resources\Websites\Pages\CreateWebsite;
 use App\Modules\Websites\Filament\Resources\Websites\Pages\EditWebsite;
@@ -30,9 +32,13 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Date;
 use UnitEnum;
 
 class WebsiteResource extends Resource
@@ -81,11 +87,16 @@ class WebsiteResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $today = Date::today();
+
         return $table
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')->label('Nome')->weight('bold')->searchable()->sortable(),
-                TextColumn::make('host')->label('Host')->searchable(),
+                TextColumn::make('contact_id')->label('Cliente')
+                    ->formatStateUsing(fn (int $state) => self::contactNames($table)[$state] ?? '—')
+                    ->url(fn (Website $record): string => ContactLink::url($record->contact_id)),
+                TextColumn::make('host')->label('Host')->searchable()->url(fn (Website $record): string => $record->url, true),
                 TextColumn::make('status')->label('Stato')->badge()->formatStateUsing(fn (WebsiteStatus $state): string => $state->label())->color(fn (WebsiteStatus $state): string => $state->color()),
                 IconColumn::make('is_up')->label('Online')->boolean()->placeholder('—'),
                 TextColumn::make('hosting_renews_on')->label('Rinnovo hosting')->date('d/m/Y')->placeholder('—')->sortable(),
@@ -93,6 +104,10 @@ class WebsiteResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')->label('Stato')->options(WebsiteStatus::options()),
+                Filter::make('down')->label('Giù adesso')
+                    ->query(fn (Builder $query): Builder => $query->where('status', WebsiteStatus::Active->value)->where('uptime_enabled', true)->whereNotNull('down_since')),
+                Filter::make('hosting_due')->label('Rinnovo hosting entro 30 giorni')
+                    ->query(fn (Builder $query): Builder => $query->where('status', WebsiteStatus::Active->value)->where('hosting_renews_on', '<=', $today->addDays(30)->toDateString())),
             ])
             ->recordActions([ViewAction::make()])
             ->paginated([25, 50]);
@@ -101,6 +116,26 @@ class WebsiteResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * The clients of the page's rows, one query for the page.
+     *
+     * @return array<int, string>
+     */
+    private static function contactNames(Table $table): array
+    {
+        return once(function () use ($table): array {
+            $records = $table->getRecords();
+            $ids = [];
+            foreach ($records instanceof Collection ? $records : $records->items() as $record) {
+                if ($record instanceof Website) {
+                    $ids[] = $record->contact_id;
+                }
+            }
+
+            return array_map(fn ($contact): string => $contact->displayName, app(FindContact::class)->byIds($ids));
+        });
     }
 
     /**

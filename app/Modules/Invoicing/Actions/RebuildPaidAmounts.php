@@ -37,7 +37,10 @@ final readonly class RebuildPaidAmounts
     {
         $fixed = 0;
 
-        $model::query()->orderBy('id')->chunkById(200, function ($documents) use (&$fixed): void {
+        // Money paid to a supplier leaves the accounts: its paid amount is the outgoing total.
+        $sign = $model === SupplierInvoice::class ? -1 : 1;
+
+        $model::query()->orderBy('id')->chunkById(200, function ($documents) use (&$fixed, $sign): void {
             $references = [];
             foreach ($documents as $document) {
                 $references[$document->id] = $document->toData()->reference();
@@ -46,7 +49,7 @@ final readonly class RebuildPaidAmounts
             $totals = $this->allocated->totals(array_values($references));
 
             foreach ($documents as $document) {
-                $paid = $totals[$references[$document->id]->toString()]->cents;
+                $paid = $sign * $totals[$references[$document->id]->toString()]->cents;
 
                 if ($document->paid_cents !== $paid) {
                     $document->forceFill(['paid_cents' => $paid])->save();

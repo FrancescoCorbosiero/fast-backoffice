@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline\Filament\Widgets;
 
+use App\Modules\Pipeline\Enums\ChangeRequestStatus;
 use App\Modules\Pipeline\Filament\Resources\ChangeRequests\ChangeRequestResource;
 use App\Modules\Pipeline\Queries\ChangeRequests;
 use Carbon\CarbonImmutable;
@@ -22,21 +23,21 @@ class PipelineOverviewWidget extends StatsOverviewWidget
     protected function getStats(): array
     {
         $counts = app(ChangeRequests::class)->counts(CarbonImmutable::today()->subDays(30));
-        $url = ChangeRequestResource::getUrl('index');
+        $url = fn (ChangeRequestStatus $status): string => ChangeRequestResource::getUrl('index', ['filters' => ['status' => ['value' => $status->value]]]);
 
         return [
             Stat::make('Anteprime da approvare', (string) $counts['preview_ready'])
                 ->description($counts['preview_ready'] === 0 ? 'nessuna richiesta in attesa' : 'richieste con anteprima pronta')
                 ->color($counts['preview_ready'] === 0 ? 'success' : 'warning')
-                ->url($url),
+                ->url($url(ChangeRequestStatus::PreviewReady)),
             Stat::make('In pubblicazione', (string) $counts['approved'])
                 ->description('approvate, in attesa del worker')
                 ->color($counts['approved'] === 0 ? 'gray' : 'info')
-                ->url($url),
+                ->url($url(ChangeRequestStatus::Approved)),
             Stat::make('Fallite negli ultimi 30 giorni', (string) $counts['failed'])
                 ->description($counts['failed'] === 0 ? 'nessun errore' : 'da controllare')
                 ->color($counts['failed'] === 0 ? 'success' : 'danger')
-                ->url($url),
+                ->url($url(ChangeRequestStatus::Failed)),
         ];
     }
 }

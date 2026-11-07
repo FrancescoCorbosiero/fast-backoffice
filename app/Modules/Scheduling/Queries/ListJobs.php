@@ -51,6 +51,23 @@ final readonly class ListJobs
         return $list;
     }
 
+    /**
+     * Key → label for every job defined in code, without touching the
+     * database: for the screens that show a run and need its job's name.
+     *
+     * @return array<string, string>
+     */
+    public function labels(): array
+    {
+        $labels = [];
+
+        foreach ($this->registry->all() as $key => $job) {
+            $labels[$key] = $job->label();
+        }
+
+        return $labels;
+    }
+
     public function find(string $key): ?JobData
     {
         foreach ($this->get() as $job) {

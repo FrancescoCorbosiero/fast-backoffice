@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Modules\Contacts\Contracts\ContactPanel;
+use App\Modules\Pipeline\Models\WebsitePipeline;
 use App\Modules\Repositories\Contributions\RepositoriesContactPanel;
 use App\Modules\Repositories\Contributions\RepositoriesWebsitePanel;
 use App\Modules\Repositories\Enums\RepositoryProvider;
+use App\Modules\Repositories\Filament\Resources\Repositories\Pages\ManageRepositories;
 use App\Modules\Repositories\Filament\Widgets\ContactRepositoriesTable;
 use App\Modules\Repositories\Filament\Widgets\WebsiteRepositoriesTable;
 use App\Modules\Repositories\Models\Repository;
@@ -95,4 +97,40 @@ it('feeds the "Nuovo" menus of both pages', function (): void {
         ->and($websitePanel?->sort())->toBe(20)
         ->and($websitePanel?->label())->toBe('Repository')
         ->and($websitePanel?->createAction($website->id)?->getLabel())->toBe('Nuovo repository');
+});
+
+it('lists each repository with its site and client, opens the create modal prefilled from the query string, and couples site and client on the form', function (): void {
+    $client = Studio::client();
+    $website = Website::factory()->create(['contact_id' => $client->id, 'name' => 'Sito Bellavista']);
+    $repository = Repository::factory()->create(['contact_id' => $client->id, 'website_id' => $website->id, 'url' => 'https://github.com/studio/bellavista']);
+    $other = Repository::factory()->create(['url' => 'https://github.com/studio/other']);
+
+    Livewire::test(ManageRepositories::class)
+        ->assertSee('Pasticceria Bellavista')->assertSee("/admin/contacts/{$client->id}", escape: false)
+        ->assertSee('Sito Bellavista')->assertSee("/admin/websites/{$website->id}", escape: false)
+        ->filterTable('website_id', $website->id)->assertCanSeeTableRecords([$repository])->assertCanNotSeeTableRecords([$other]);
+
+    Livewire::withQueryParams(['contact_id' => (string) $client->id, 'website_id' => (string) $website->id])
+        ->test(ManageRepositories::class)
+        ->mountAction('create')
+        ->assertSchemaStateSet(['contact_id' => $client->id, 'website_id' => $website->id]);
+
+    Livewire::test(ManageRepositories::class)
+        ->mountAction('create')
+        ->setActionData(['website_id' => $website->id])
+        ->assertSchemaStateSet(['contact_id' => $client->id]);
+});
+
+it('refuses to delete a repository a pipeline is built from, saying what to do first', function (): void {
+    $client = Studio::client();
+    $website = Website::factory()->create(['contact_id' => $client->id]);
+    $repository = Repository::factory()->create(['contact_id' => $client->id, 'website_id' => $website->id, 'url' => 'https://github.com/studio/bellavista']);
+    WebsitePipeline::factory()->create(['website_id' => $website->id, 'repository_id' => $repository->id]);
+
+    Livewire::test(ManageRepositories::class)
+        ->callTableAction('delete', $repository)
+        ->assertNotified('Repository non eliminato')
+        ->assertNotNotified('Eliminato');
+
+    expect(Repository::query()->count())->toBe(1);
 });

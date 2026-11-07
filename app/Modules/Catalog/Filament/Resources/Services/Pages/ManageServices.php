@@ -15,7 +15,7 @@ class ManageServices extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->mutateDataUsing(fn (array $data): array => ServiceResource::toAttributes($data)),
+            CreateAction::make()->mutateDataUsing(fn (array $data): array => [...ServiceResource::toAttributes($data), 'sort' => ServiceResource::nextSort()]),
         ];
     }
 }

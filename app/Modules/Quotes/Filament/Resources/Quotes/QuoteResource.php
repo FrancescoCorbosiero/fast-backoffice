@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quotes\Filament\Resources\Quotes;
 
 use App\Modules\Contacts\Enums\ContactRole;
+use App\Modules\Contacts\Filament\Components\ContactLink;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Quotes\Data\QuoteInput;
@@ -53,6 +54,9 @@ class QuoteResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'number_text';
 
+    /** How soon «in scadenza» is: the list's tab and filter, the dashboard. */
+    public const int EXPIRING_DAYS = 7;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -75,7 +79,7 @@ class QuoteResource extends Resource
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('number_text')->label('Numero')->weight('bold')->searchable(),
-                TextColumn::make('customer_name')->label('Cliente')->searchable(),
+                TextColumn::make('customer_name')->label('Cliente')->searchable()->url(fn (Quote $record): string => ContactLink::url($record->contact_id)),
                 TextColumn::make('subject')->label('Oggetto')->placeholder('—')->limit(40)->searchable(),
                 TextColumn::make('issued_on')->label('Data')->date('d/m/Y')->sortable(),
                 TextColumn::make('valid_until')->label('Valido fino al')->date('d/m/Y')->sortable(),
@@ -86,9 +90,9 @@ class QuoteResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')->label('Stato')->options(QuoteStatus::options())
-                    ->query(fn (Builder $query, array $data): Builder => self::filterByStatus($query, $data, $today)),
-                Filter::make('expiring')->label('In scadenza entro 7 giorni')
-                    ->query(fn (Builder $query): Builder => Quotes::openOn($query, $today)->where('valid_until', '<=', $today->addDays(7)->toDateString())),
+                    ->query(fn (Builder $query, array $data): Builder => self::withStatus($query, QuoteStatus::tryFrom(is_string($data['value'] ?? null) ? $data['value'] : ''), $today)),
+                Filter::make('expiring')->label('In scadenza entro '.self::EXPIRING_DAYS.' giorni')
+                    ->query(fn (Builder $query): Builder => self::expiring($query, $today)),
             ])
             ->recordActions([ViewAction::make()])
             ->paginated([25, 50]);
@@ -152,19 +156,31 @@ class QuoteResource extends Resource
     }
 
     /**
+     * The quotes shown with a status on a day (Expired is derived from the
+     * validity, never stored); the list's tabs, filter and the dashboard
+     * widget all count the same way.
+     *
      * @param  Builder<Quote>  $query
-     * @param  array<array-key, mixed>  $data
      * @return Builder<Quote>
      */
-    private static function filterByStatus(Builder $query, array $data, CarbonImmutable $today): Builder
+    public static function withStatus(Builder $query, ?QuoteStatus $status, CarbonImmutable $today): Builder
     {
-        $status = QuoteStatus::tryFrom(is_string($data['value'] ?? null) ? $data['value'] : '');
-
         return match ($status) {
             null => $query,
             QuoteStatus::Expired => $query->whereIn('status', [QuoteStatus::Draft->value, QuoteStatus::Sent->value])->where('valid_until', '<', $today->toDateString()),
             QuoteStatus::Draft, QuoteStatus::Sent => $query->where('status', $status->value)->where('valid_until', '>=', $today->toDateString()),
             default => $query->where('status', $status->value),
         };
+    }
+
+    /**
+     * Open and valid for at most EXPIRING_DAYS more days.
+     *
+     * @param  Builder<Quote>  $query
+     * @return Builder<Quote>
+     */
+    public static function expiring(Builder $query, CarbonImmutable $today): Builder
+    {
+        return Quotes::openOn($query, $today)->where('valid_until', '<=', $today->startOfDay()->addDays(self::EXPIRING_DAYS)->toDateString());
     }
 }

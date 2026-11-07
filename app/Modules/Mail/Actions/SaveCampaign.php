@@ -45,6 +45,23 @@ final readonly class SaveCampaign
     }
 
     /**
+     * A new draft with the same subject, body and audience: "send the next
+     * one like this" after a campaign went out. Any status duplicates.
+     */
+    public function duplicate(int $campaignId): CampaignData
+    {
+        $campaign = Campaign::query()->findOrFail($campaignId);
+
+        return $this->create(new CampaignInput(
+            name: mb_substr('Copia di '.$campaign->name, 0, 160),
+            subject: $campaign->subject,
+            bodyHtml: $campaign->body_html,
+            preheader: $campaign->preheader,
+            audienceRoles: $campaign->roleEnums(),
+        ));
+    }
+
+    /**
      * @throws LogicException unless the campaign is a draft
      */
     public function delete(int $campaignId): void
