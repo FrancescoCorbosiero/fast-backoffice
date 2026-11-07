@@ -36,6 +36,14 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->profile(isSimple: false)
+            ->brandName('fast')
+            // Livewire navigate: a page change swaps the content, the shell stays. External links open in a
+            // new tab (->url(..., true)) and downloads are actions that return a response, so neither is affected.
+            ->spa()
+            ->sidebarCollapsibleOnDesktop()
+            ->unsavedChangesAlerts()
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->globalSearchFieldKeyBindingSuffix()
             // Optional: the owner turns it on from their profile page when they want it.
             ->multiFactorAuthentication([
                 AppAuthentication::make()->recoverable(),

@@ -29,6 +29,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
@@ -49,6 +50,8 @@ class QuoteResource extends Resource
     protected static ?string $pluralModelLabel = 'Preventivi';
 
     protected static ?string $slug = 'quotes';
+
+    protected static ?string $recordTitleAttribute = 'number_text';
 
     public static function form(Schema $schema): Schema
     {
@@ -99,6 +102,43 @@ class QuoteResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['number_text', 'subject', 'customer_name'];
+    }
+
+    public static function getGlobalSearchResultTitle(Model $record): string|Htmlable
+    {
+        return $record instanceof Quote ? $record->toData()->title() : parent::getGlobalSearchResultTitle($record);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Quote) {
+            return [];
+        }
+
+        $data = $record->toData();
+
+        return array_filter([
+            'Cliente' => $record->customer_name,
+            'Oggetto' => $record->subject,
+            'Totale' => $data->total->format(),
+            'Stato' => $data->statusOn(Date::today())->label(),
+        ], fn (?string $value): bool => $value !== null);
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array

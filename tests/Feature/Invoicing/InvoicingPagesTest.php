@@ -6,9 +6,11 @@ use App\Modules\Cash\Models\Movement;
 use App\Modules\Invoicing\Enums\InvoiceStatus;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\CreateInvoice;
 use App\Modules\Invoicing\Filament\Resources\Invoices\Pages\ViewInvoice;
+use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\CreatePaymentRequest;
 use App\Modules\Invoicing\Filament\Resources\PaymentRequests\Pages\ViewPaymentRequest;
 use App\Modules\Invoicing\Filament\Resources\RecurringInvoices\Pages\ListRecurringInvoices;
 use App\Modules\Invoicing\Filament\Resources\SupplierInvoices\Pages\ListSupplierInvoices;
+use App\Modules\Invoicing\Filament\Widgets\ContactInvoicesTable;
 use App\Modules\Invoicing\Models\Invoice;
 use App\Modules\Invoicing\Models\RecurringInvoice;
 use App\Modules\Invoicing\Models\SupplierInvoice;
@@ -123,7 +125,36 @@ it('shows the invoices on the contact page and the overview on the dashboard', f
     Studio::issued($client, [Studio::line('Sito', '1000.00')], '2026-03-10');
 
     $this->get("/admin/contacts/{$client->id}")->assertOk()->assertSee('Fatture');
-    Livewire::test(App\Modules\Invoicing\Filament\Widgets\ContactInvoicesTable::class, ['contactId' => $client->id])->assertSee('1/2026');
+    Livewire::test(ContactInvoicesTable::class, ['contactId' => $client->id])->assertSee('1/2026');
     $this->get('/admin')->assertOk();
     Livewire::test(App\Modules\Invoicing\Filament\Widgets\InvoicingOverviewWidget::class)->assertSee('Fatture da inviare a SdI')->assertSee('la prima scade tra 7 giorni');
+});
+
+it('offers to bill the contact from the invoices section, prefilling the create forms with the client', function (): void {
+    $client = Studio::client();
+
+    Livewire::test(ContactInvoicesTable::class, ['contactId' => $client->id])
+        ->assertSee('Fatture')
+        ->assertDontSee('Contact Invoices Table')
+        ->assertSee('Nessuna fattura')
+        ->assertSee('La bozza diventa fattura quando la emetti')
+        ->assertSee('Nuova fattura')
+        ->assertSee('Nuova richiesta di pagamento')
+        ->assertSee("/admin/invoices/create?contact_id={$client->id}", escape: false)
+        ->assertSee("/admin/payment-requests/create?contact_id={$client->id}", escape: false);
+
+    $this->get("/admin/invoices/create?contact_id={$client->id}")->assertOk();
+    $this->get("/admin/payment-requests/create?contact_id={$client->id}")->assertOk();
+
+    Livewire::withQueryParams(['contact_id' => (string) $client->id])
+        ->test(CreateInvoice::class)
+        ->assertSchemaStateSet(['contact_id' => $client->id]);
+
+    Livewire::withQueryParams(['contact_id' => (string) $client->id])
+        ->test(CreatePaymentRequest::class)
+        ->assertSchemaStateSet(['contact_id' => $client->id]);
+
+    Livewire::withQueryParams(['contact_id' => 'abc'])
+        ->test(CreateInvoice::class)
+        ->assertSchemaStateSet(['contact_id' => null]);
 });

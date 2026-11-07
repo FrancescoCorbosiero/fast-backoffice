@@ -11,7 +11,9 @@ use App\Modules\Contacts\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Modules\Contacts\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Modules\Contacts\Models\Contact;
 use App\Modules\Contacts\Queries\FindContact;
+use Filament\Actions\Action;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -98,7 +100,7 @@ it('edits a contact through the module action', function (): void {
         ->and($contact->roles)->toBe(['client', 'partner']);
 });
 
-it('shows the contact page with the sections other modules contribute', function (): void {
+it('shows the contact page with the sections other modules contribute, and their create actions in the "Nuovo" menu', function (): void {
     $contact = Contact::factory()->create(['display_name' => 'Mario Rossi']);
     app()->instance('tests.contact-panel', new class implements ContactPanel
     {
@@ -119,7 +121,12 @@ it('shows the contact page with the sections other modules contribute', function
 
         public function component(int $contactId): Component
         {
-            return Text::make("Contenuto per il contatto {$contactId}");
+            return Section::make($this->label())->components([Text::make("Contenuto per il contatto {$contactId}")]);
+        }
+
+        public function createAction(int $contactId): ?Action
+        {
+            return Action::make('new-test-thing')->label('Cosa di prova')->url("/admin/test-things/create?contact_id={$contactId}");
         }
     });
     app()->tag(['tests.contact-panel'], ContactPanel::TAG);
@@ -128,7 +135,35 @@ it('shows the contact page with the sections other modules contribute', function
         ->assertOk()
         ->assertSee('Mario Rossi')
         ->assertSee('Sezione di prova')
-        ->assertSee("Contenuto per il contatto {$contact->id}");
+        ->assertSee("Contenuto per il contatto {$contact->id}")
+        ->assertSee('Nuovo')
+        ->assertSee('Cosa di prova')
+        ->assertSee("/admin/test-things/create?contact_id={$contact->id}", escape: false);
+});
+
+it('offers, for every section of the contact page that lists things the owner creates, a way to create one for that contact', function (): void {
+    $contact = Contact::factory()->create(['display_name' => 'Mario Rossi']);
+
+    /** @var iterable<ContactPanel> $panels */
+    $panels = app()->tagged(ContactPanel::TAG);
+    $withCreate = [];
+    $withoutCreate = [];
+
+    foreach ($panels as $panel) {
+        $action = $panel->createAction($contact->id);
+        $action === null ? $withoutCreate[] = $panel->key() : $withCreate[] = $panel->key();
+
+        if ($action !== null && $action->getUrl() !== null) {
+            expect($action->getUrl())->toContain("contact_id={$contact->id}");
+        }
+    }
+
+    sort($withCreate);
+    sort($withoutCreate);
+
+    // Bookings come from Cal.com and campaigns go to many contacts: those two explain themselves instead.
+    expect($withCreate)->toBe(['cash-movements', 'domains', 'invoices', 'quotes', 'repositories', 'websites'])
+        ->and($withoutCreate)->toBe(['bookings', 'campaigns']);
 });
 
 it('blocks and unblocks email, toggles consent and merges from the contact page', function (): void {

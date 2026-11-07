@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Invoicing\Models\Invoice;
+use App\Modules\Quotes\Contributions\QuotesContactPanel;
 use App\Modules\Quotes\Enums\QuoteStatus;
 use App\Modules\Quotes\Filament\Resources\Quotes\Pages\CreateQuote;
 use App\Modules\Quotes\Filament\Resources\Quotes\Pages\EditQuote;
@@ -91,4 +92,37 @@ it('shows the derived status in the list and on the contact page', function (): 
 
     $this->get("/admin/contacts/{$client->id}")->assertOk()->assertSee('Preventivi');
     Livewire::test(ContactQuotesTable::class, ['contactId' => $client->id])->assertSee('PRV 1/2026')->assertSee('Scaduto');
+});
+
+it('opens the quote form already knowing the client from the contact page', function (): void {
+    $client = Studio::client();
+
+    $url = QuotesContactPanel::newQuote($client->id)->getUrl();
+    expect($url)->toBe(CreateQuote::getUrl(['contact_id' => $client->id]))->toContain("contact_id={$client->id}");
+    expect((new QuotesContactPanel)->createAction($client->id))->not->toBeNull();
+
+    $this->get("/admin/quotes/create?contact_id={$client->id}")->assertOk();
+
+    Livewire::withQueryParams(['contact_id' => (string) $client->id])
+        ->test(CreateQuote::class)
+        ->assertSchemaStateSet(['contact_id' => $client->id, 'issued_on' => '2026-03-15']);
+});
+
+it('offers a new quote from the contact page, with or without quotes', function (): void {
+    $client = Studio::client();
+
+    Livewire::test(ContactQuotesTable::class, ['contactId' => $client->id])
+        ->assertSee('Preventivi')
+        ->assertSee('Nessun preventivo')
+        ->assertSee('bozza di fattura')
+        ->assertSee('Nuovo preventivo')
+        ->assertSee("contact_id={$client->id}", escape: false);
+
+    Quote::factory()->create(['contact_id' => $client->id, 'subject' => 'Restyling']);
+
+    Livewire::test(ContactQuotesTable::class, ['contactId' => $client->id])
+        ->assertSee('Restyling')
+        ->assertDontSee('Nessun preventivo')
+        ->assertSee('Nuovo preventivo')
+        ->assertSee("contact_id={$client->id}", escape: false);
 });

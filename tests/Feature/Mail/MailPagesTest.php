@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Modules\Contacts\Models\Contact;
+use App\Modules\Mail\Contributions\CampaignsContactPanel;
 use App\Modules\Mail\Enums\CampaignStatus;
+use App\Modules\Mail\Filament\Resources\Campaigns\CampaignResource;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\CreateCampaign;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\EditCampaign;
 use App\Modules\Mail\Filament\Resources\Campaigns\Pages\ViewCampaign;
@@ -76,4 +78,27 @@ it('writes, edits, sends, pauses and cancels a campaign from the panel', functio
     $another = Campaign::factory()->create();
     Livewire::test(ViewCampaign::class, ['record' => $another->id])->callAction('delete')->assertRedirect();
     expect(Campaign::query()->whereKey($another->id)->exists())->toBeFalse();
+});
+
+it('explains on the contact page why a contact has received no campaign, and leads to the campaigns', function (): void {
+    $mailable = Contact::factory()->create();
+    $noEmail = Contact::factory()->create(['email' => null]);
+    $noConsent = Contact::factory()->withoutConsent()->create();
+    $bounced = Contact::factory()->suppressed('bounce')->create();
+
+    Livewire::test(ContactCampaignsTable::class, ['contactId' => $mailable->id])
+        ->assertSee('Campagne email')
+        ->assertSee('Nessuna campagna ricevuta')
+        ->assertSee('Riceverà la prossima campagna rivolta ai contatti con ruolo Cliente.')
+        ->assertSee('Vai alle campagne')
+        ->assertSee(CampaignResource::getUrl('index'), escape: false)
+        ->assertSee('Nuova campagna')
+        ->assertSee(CampaignResource::getUrl('create'), escape: false);
+
+    Livewire::test(ContactCampaignsTable::class, ['contactId' => $noEmail->id])->assertSee('Senza un indirizzo email');
+    Livewire::test(ContactCampaignsTable::class, ['contactId' => $noConsent->id])->assertSee('Non ha dato il consenso');
+    Livewire::test(ContactCampaignsTable::class, ['contactId' => $bounced->id])->assertSee('bloccato')->assertSee('email respinta');
+
+    expect(app(CampaignsContactPanel::class)->createAction($mailable->id))->toBeNull()
+        ->and(CampaignsContactPanel::emptyStateDescription(999999))->toContain('non è più attivo');
 });

@@ -54,6 +54,8 @@ class DomainResource extends Resource
 
     protected static ?string $slug = 'domains';
 
+    protected static ?string $recordTitleAttribute = 'name';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -103,6 +105,35 @@ class DomainResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'registrar'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Domain) {
+            return [];
+        }
+
+        return array_filter([
+            'Scade il' => $record->expires_on->format('d/m/Y'),
+            'Registrar' => $record->registrar,
+            'Stato' => $record->status->label(),
+        ], fn (?string $value): bool => $value !== null);
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array

@@ -9,6 +9,7 @@ use App\Modules\Repositories\Data\RepositoryData;
 use App\Modules\Repositories\Data\RepositoryInput;
 use App\Modules\Repositories\Enums\RepositoryProvider;
 use App\Modules\Repositories\Models\Repository;
+use App\Modules\Repositories\Support\GitUrl;
 use App\Modules\Websites\Queries\Websites;
 use Illuminate\Validation\ValidationException;
 
@@ -56,13 +57,12 @@ final readonly class SaveRepository
     private function validate(RepositoryInput $input, ?int $ignoreId = null): void
     {
         $errors = [];
-        $parts = parse_url($input->url);
 
         if ($input->name === '') {
             $errors['name'] = 'Dai un nome al repository.';
         }
-        if (! is_array($parts) || ! isset($parts['host']) || ! in_array($parts['scheme'] ?? '', ['http', 'https', 'ssh', 'git'], true)) {
-            $errors['url'] = 'Scrivi l\'indirizzo del repository.';
+        if (GitUrl::host($input->url) === null) {
+            $errors['url'] = 'Scrivi l\'indirizzo del repository: https://… oppure git@host:… per SSH.';
         } elseif (Repository::query()->where('url', $input->url)->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))->exists()) {
             $errors['url'] = 'Questo repository è già registrato.';
         }

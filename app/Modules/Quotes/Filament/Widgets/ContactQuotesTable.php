@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Quotes\Filament\Widgets;
 
+use App\Modules\Quotes\Contributions\QuotesContactPanel;
 use App\Modules\Quotes\Filament\Resources\Quotes\QuoteResource;
 use App\Modules\Quotes\Models\Quote;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -24,6 +26,8 @@ class ContactQuotesTable extends TableWidget
 
         return $table
             ->query(fn (): Builder => Quote::query()->where('contact_id', $this->contactId))
+            ->heading('Preventivi')
+            ->headerActions([QuotesContactPanel::newQuote($this->contactId)])
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('number_text')->label('Numero')->url(fn (Quote $record): string => QuoteResource::getUrl('view', ['record' => $record])),
@@ -34,7 +38,10 @@ class ContactQuotesTable extends TableWidget
                     ->formatStateUsing(fn (Quote $record): string => $record->toData()->statusOn($today)->label())
                     ->color(fn (Quote $record): string => $record->toData()->statusOn($today)->color()),
             ])
+            ->emptyStateIcon(Heroicon::OutlinedDocumentText)
             ->emptyStateHeading('Nessun preventivo')
+            ->emptyStateDescription('Un preventivo accettato diventa una bozza di fattura o una richiesta di pagamento in un clic.')
+            ->emptyStateActions([QuotesContactPanel::newQuote($this->contactId)])
             ->paginated([10, 25]);
     }
 }

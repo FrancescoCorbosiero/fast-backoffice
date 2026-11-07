@@ -9,12 +9,23 @@ use App\Modules\Invoicing\Data\DraftInput;
 use App\Modules\Invoicing\Filament\Components\LinesSchema;
 use App\Modules\Invoicing\Filament\Resources\Invoices\InvoiceResource;
 use App\Modules\Invoicing\Models\Invoice;
+use App\Support\Filament\PrefillsFromQuery;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class CreateInvoice extends CreateRecord
 {
+    use PrefillsFromQuery;
+
     protected static string $resource = InvoiceResource::class;
+
+    /**
+     * @return list<string>
+     */
+    protected function prefillable(): array
+    {
+        return ['contact_id'];
+    }
 
     protected function handleRecordCreation(array $data): Model
     {

@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Modules\Cash\Contributions\MovementsContactPanel;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Modules\Cash\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\CreateMovement;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\EditMovement;
 use App\Modules\Cash\Filament\Resources\Movements\Pages\ListMovements;
 use App\Modules\Cash\Filament\Resources\RecurringExpenses\Pages\ListRecurringExpenses;
+use App\Modules\Cash\Filament\Widgets\ContactMovementsTable;
 use App\Modules\Cash\Models\Account;
 use App\Modules\Cash\Models\Category;
 use App\Modules\Cash\Models\Movement;
@@ -122,5 +124,42 @@ it('shows a contact\'s movements on the contact page', function (): void {
     Movement::factory()->for($account)->in(12_345)->create(['contact_id' => $contact->id, 'description' => 'Saldo progetto']);
 
     $this->get("/admin/contacts/{$contact->id}")->assertOk()->assertSee('Movimenti di cassa');
-    Livewire::test(App\Modules\Cash\Filament\Widgets\ContactMovementsTable::class, ['contactId' => $contact->id])->assertSee('Saldo progetto')->assertSee('123,45');
+    Livewire::test(ContactMovementsTable::class, ['contactId' => $contact->id])->assertSee('Saldo progetto')->assertSee('123,45');
+});
+
+it('offers to record a movement from the contact page, both from the section and from its empty state', function (): void {
+    $contact = Contact::factory()->create();
+    $url = CreateMovement::prefilledUrl(['contact_id' => $contact->id]);
+
+    expect($url)->toEndWith("/admin/cash/movements/create?contact_id={$contact->id}")
+        ->and((new MovementsContactPanel)->createAction($contact->id)->getUrl())->toBe($url);
+
+    Livewire::test(ContactMovementsTable::class, ['contactId' => $contact->id])
+        ->assertSee('Movimenti di cassa')
+        ->assertSee('Nessun movimento')
+        ->assertSee('I pagamenti delle sue fatture arrivano qui da soli; tutto il resto lo registri a mano.')
+        ->assertSee('Nuovo movimento')
+        ->assertSee("contact_id={$contact->id}", escape: false);
+
+    Movement::factory()->for(Account::factory()->create())->create(['contact_id' => $contact->id]);
+
+    Livewire::test(ContactMovementsTable::class, ['contactId' => $contact->id])
+        ->assertDontSee('Nessun movimento')
+        ->assertSee('Nuovo movimento')
+        ->assertSee("contact_id={$contact->id}", escape: false);
+});
+
+it('opens the movement form already knowing the counterparty it was reached from', function (): void {
+    Account::factory()->create();
+    $contact = Contact::factory()->create(['display_name' => 'Fornitore Srl']);
+
+    $this->get("/admin/cash/movements/create?contact_id={$contact->id}")->assertOk()->assertSee('Fornitore Srl');
+
+    Livewire::withQueryParams(['contact_id' => (string) $contact->id])
+        ->test(CreateMovement::class)
+        ->assertSchemaStateSet(['contact_id' => $contact->id, 'direction' => 'out', 'is_taxable' => true]);
+
+    Livewire::withQueryParams(['contact_id' => 'abc'])
+        ->test(CreateMovement::class)
+        ->assertSchemaStateSet(['contact_id' => null]);
 });

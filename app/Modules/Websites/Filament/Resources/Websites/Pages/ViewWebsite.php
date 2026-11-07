@@ -14,12 +14,14 @@ use App\Modules\Websites\Actions\LogHostingRenewal;
 use App\Modules\Websites\Actions\SetWebsiteStatus;
 use App\Modules\Websites\Actions\StartSubscription;
 use App\Modules\Websites\Actions\StopSubscription;
+use App\Modules\Websites\Contracts\WebsitePanel;
 use App\Modules\Websites\Enums\WebsiteStatus;
 use App\Modules\Websites\Filament\Resources\Websites\WebsiteResource;
 use App\Modules\Websites\Models\Website;
 use App\Support\Shape;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -93,7 +95,52 @@ class ViewWebsite extends ViewRecord
             $components[] = Section::make('Note')->compact()->components([TextEntry::make('h_notes')->label('')->state($data->notes)]);
         }
 
+        foreach ($this->panels() as $panel) {
+            $components[] = $panel->component($this->website()->id)->key('panel-'.$panel->key());
+        }
+
         return $schema->components($components);
+    }
+
+    /**
+     * The sections modules that link to websites contribute (domains,
+     * repositories…), in their order.
+     *
+     * @return list<WebsitePanel>
+     */
+    private function panels(): array
+    {
+        /** @var iterable<WebsitePanel> $panels */
+        $panels = app()->tagged(WebsitePanel::TAG);
+        $sorted = [];
+
+        foreach ($panels as $panel) {
+            $sorted[] = $panel;
+        }
+
+        usort($sorted, fn (WebsitePanel $a, WebsitePanel $b): int => $a->sort() <=> $b->sort());
+
+        return $sorted;
+    }
+
+    /**
+     * The "Nuovo" menu: one entry per section that creates things.
+     *
+     * @return list<Action>
+     */
+    private function createActions(): array
+    {
+        $actions = [];
+
+        foreach ($this->panels() as $panel) {
+            $action = $panel->createAction($this->website()->id);
+
+            if ($action !== null) {
+                $actions[] = $action;
+            }
+        }
+
+        return $actions;
     }
 
     protected function getHeaderActions(): array
@@ -103,7 +150,15 @@ class ViewWebsite extends ViewRecord
             $frequencies[$frequency->value] = $frequency->label();
         }
 
+        $create = $this->createActions();
+
         return [
+            ActionGroup::make($create)
+                ->label('Nuovo')
+                ->icon(Heroicon::OutlinedPlus)
+                ->color('primary')
+                ->button()
+                ->visible($create !== []),
             EditAction::make(),
             Action::make('renewal')->label('Registra rinnovo hosting')->icon(Heroicon::OutlinedBanknotes)
                 ->visible(fn (): bool => $this->website()->toData()->hasHostingRenewal() && $this->website()->status === WebsiteStatus::Active)

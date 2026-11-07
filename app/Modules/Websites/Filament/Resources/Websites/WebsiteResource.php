@@ -51,6 +51,8 @@ class WebsiteResource extends Resource
 
     protected static ?string $slug = 'websites';
 
+    protected static ?string $recordTitleAttribute = 'name';
+
     public static function form(Schema $schema): Schema
     {
         $frequencies = [];
@@ -99,6 +101,34 @@ class WebsiteResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'host'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Website) {
+            return [];
+        }
+
+        return [
+            'Host' => $record->host,
+            'Stato' => $record->status->label(),
+        ];
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array

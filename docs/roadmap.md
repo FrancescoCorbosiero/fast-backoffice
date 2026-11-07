@@ -108,3 +108,13 @@ Notes: `docker/prod/Dockerfile` builds two targets (three since phase 9) from on
 - [x] Tests for every transition, the policy, both runs, the deploy and the portal with git and the CLI faked; `docs/pipeline.md`; the worker in the runbook
 
 Notes: layer 5 is `Pipeline`. The first draft put the repository URL on the website and a Horizon supervisor on the pipeline queue; the review moved the link to a Pipeline-owned table (Repositories already holds URL and branch) and made the `pipeline-worker` container the only consumer, because the Horizon image has no git or CLI. Approve and reject only change state; the worker does git. What a run may touch is enforced on the diff (`PathPolicy`), not only in the prompt. The CLI itself was not run where this phase was written (no API key there): the tests fake it behind `CommandRunner`. Still to **verify** on a real repository: the CLI's JSON result shape (`ClaudeCli::parse` tolerates a missing field), the flags against the installed CLI version, and the preview vhost. `symfony/yaml` was added for `pipeline.yml`.
+
+## Journeys
+
+The phases built the modules; this pass walks the screens as the owner does and puts the next step one click away. Every entry comes with its tests.
+
+- [x] The contact page: every contributed section brings its own heading (no more class-name headings), a create action in its header and in its empty state, and the page header's "Nuovo" menu gathers them (`ContactPanel::createAction`); create pages opened from there are prefilled with the contact (`PrefillsFromQuery`); sections that are not created by hand (bookings, campaigns) explain where their rows come from and link there
+- [x] The website page: domains and repositories as sections (`WebsitePanel`), each with a create action prefilled with the website and its client
+- [x] The panel: SPA navigation, collapsible sidebar, unsaved-changes alerts, global search (⌘K) over contacts, websites, invoices, quotes, domains and leads
+
+Notes: no theme is compiled (the production image has no Node); the panel stays on Filament's own stylesheet with the amber accent.

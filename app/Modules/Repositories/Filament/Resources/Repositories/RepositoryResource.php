@@ -7,14 +7,12 @@ namespace App\Modules\Repositories\Filament\Resources\Repositories;
 use App\Modules\Contacts\Enums\ContactRole;
 use App\Modules\Contacts\Filament\Components\ContactPicker;
 use App\Modules\Repositories\Actions\SaveRepository;
-use App\Modules\Repositories\Data\RepositoryInput;
 use App\Modules\Repositories\Enums\RepositoryProvider;
 use App\Modules\Repositories\Filament\Resources\Repositories\Pages\ManageRepositories;
 use App\Modules\Repositories\Models\Repository;
 use App\Modules\Websites\Queries\Websites;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -66,12 +64,7 @@ class RepositoryResource extends Resource
                 TextColumn::make('default_branch')->label('Branch'),
             ])
             ->recordActions([
-                EditAction::make()
-                    ->using(function (Repository $record, array $data): Repository {
-                        app(SaveRepository::class)->update($record->id, RepositoryInput::fromArray($data));
-
-                        return $record->refresh();
-                    }),
+                RepositoryActions::edit(),
                 DeleteAction::make()->using(fn (Repository $record) => app(SaveRepository::class)->delete($record->id)),
             ])
             ->paginated([25, 50]);

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Mail\Filament\Widgets;
 
+use App\Modules\Mail\Contributions\CampaignsContactPanel;
 use App\Modules\Mail\Enums\RecipientStatus;
 use App\Modules\Mail\Filament\Resources\Campaigns\CampaignResource;
 use App\Modules\Mail\Models\CampaignRecipient;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -22,6 +24,8 @@ class ContactCampaignsTable extends TableWidget
     {
         return $table
             ->query(fn (): Builder => CampaignRecipient::query()->with('campaign')->where('contact_id', $this->contactId))
+            ->heading('Campagne email')
+            ->headerActions([CampaignsContactPanel::openCampaigns(), CampaignsContactPanel::newCampaign()])
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('campaign.name')->label('Campagna')->url(fn (CampaignRecipient $record): string => CampaignResource::getUrl('view', ['record' => $record->campaign_id])),
@@ -29,7 +33,10 @@ class ContactCampaignsTable extends TableWidget
                 TextColumn::make('status')->label('Stato')->badge()->formatStateUsing(fn (RecipientStatus $state): string => $state->label())->color(fn (RecipientStatus $state): string => $state->color()),
                 TextColumn::make('unsubscribed_at')->label('Disiscritto')->dateTime('d/m/Y')->placeholder('—'),
             ])
+            ->emptyStateIcon(Heroicon::OutlinedMegaphone)
             ->emptyStateHeading('Nessuna campagna ricevuta')
+            ->emptyStateDescription(fn (): string => CampaignsContactPanel::emptyStateDescription($this->contactId))
+            ->emptyStateActions([CampaignsContactPanel::openCampaigns(), CampaignsContactPanel::newCampaign()])
             ->paginated([10, 25]);
     }
 }

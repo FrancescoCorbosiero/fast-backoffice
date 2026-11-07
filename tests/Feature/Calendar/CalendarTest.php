@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Modules\Calendar\Actions\RecordBooking;
+use App\Modules\Calendar\Contributions\BookingsContactPanel;
 use App\Modules\Calendar\Enums\BookingStatus;
 use App\Modules\Calendar\Events\BookingCancelled;
 use App\Modules\Calendar\Events\BookingRecorded;
+use App\Modules\Calendar\Filament\Resources\Bookings\BookingResource;
 use App\Modules\Calendar\Filament\Resources\Bookings\Pages\ListBookings;
 use App\Modules\Calendar\Filament\Widgets\ContactBookingsTable;
 use App\Modules\Calendar\Filament\Widgets\UpcomingBookingsWidget;
@@ -172,4 +174,18 @@ it('lists what is coming, follows merged contacts, and shows up in the panel', f
 
     $recorded = app(RecordBooking::class)->record(CalComPayload::fromApi(['uid' => 'new', 'title' => 'x', 'start' => '2026-05-01T10:00:00Z', 'end' => '2026-05-01T10:30:00Z', 'attendees' => [['email' => $other->email]]]), 'sync');
     expect($recorded->contactId)->toBe($other->id);
+});
+
+it('explains itself on the contact page when the contact has no booking, and opens the calendar', function (): void {
+    signInAsOwner();
+    $contact = Contact::factory()->create();
+
+    Livewire::test(ContactBookingsTable::class, ['contactId' => $contact->id])
+        ->assertSee('Appuntamenti')
+        ->assertSee('Nessun appuntamento')
+        ->assertSee('Gli appuntamenti arrivano da Cal.com quando il contatto prenota.')
+        ->assertSee('Apri il calendario')
+        ->assertSee(BookingResource::getUrl('index'), escape: false);
+
+    expect(app(BookingsContactPanel::class)->createAction($contact->id))->toBeNull();
 });

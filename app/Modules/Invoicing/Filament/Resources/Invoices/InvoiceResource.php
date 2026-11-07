@@ -28,6 +28,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
@@ -47,6 +48,8 @@ class InvoiceResource extends Resource
     protected static ?string $pluralModelLabel = 'Fatture';
 
     protected static ?string $slug = 'invoices';
+
+    protected static ?string $recordTitleAttribute = 'number_text';
 
     public static function form(Schema $schema): Schema
     {
@@ -106,6 +109,43 @@ class InvoiceResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery();
+    }
+
+    /**
+     * The customer's name is the snapshot taken on the document, so a renamed contact still finds the invoices it had.
+     *
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['number_text', 'customer_name'];
+    }
+
+    public static function getGlobalSearchResultTitle(Model $record): string|Htmlable
+    {
+        // A draft has no number yet: "Fattura (bozza)" instead of the bare model label.
+        return $record instanceof Invoice ? $record->toData()->title() : parent::getGlobalSearchResultTitle($record);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Invoice) {
+            return [];
+        }
+
+        return [
+            'Cliente' => $record->customer_name,
+            'Totale' => $record->toData()->total->format(),
+            'Stato' => $record->status->label(),
+        ];
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     private static function paymentState(Invoice $record, CarbonImmutable $today): ?PaymentState

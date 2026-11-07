@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Cash\Models\Movement;
 use App\Modules\Invoicing\Models\RecurringInvoice;
+use App\Modules\Websites\Contributions\WebsitesContactPanel;
 use App\Modules\Websites\Enums\WebsiteStatus;
 use App\Modules\Websites\Filament\Resources\Websites\Pages\CreateWebsite;
 use App\Modules\Websites\Filament\Resources\Websites\Pages\EditWebsite;
@@ -75,4 +76,40 @@ it('checks the sites from the list and shows them on the dashboard and the conta
     Livewire::test(WebsitesStatusWidget::class)->assertSee('Siti giù')->assertSee('Pasticceria Bellavista')->assertSee('già scaduti');
     $this->get("/admin/contacts/{$client->id}")->assertOk()->assertSee('Siti');
     Livewire::test(ContactWebsitesTable::class, ['contactId' => $client->id])->assertSee('www.bellavista.example');
+});
+
+it('offers to create a site from the contact page, both from the section and from its empty state', function (): void {
+    $client = Studio::client();
+    $url = CreateWebsite::prefilledUrl(['contact_id' => $client->id]);
+
+    expect($url)->toEndWith("/admin/websites/create?contact_id={$client->id}")
+        ->and((new WebsitesContactPanel)->createAction($client->id)?->getUrl())->toBe($url);
+
+    Livewire::test(ContactWebsitesTable::class, ['contactId' => $client->id])
+        ->assertSee('Siti')
+        ->assertSee('Nessun sito')
+        ->assertSee('Hosting, canone e controllo online partono da qui.')
+        ->assertSee('Nuovo sito')
+        ->assertSee("contact_id={$client->id}", escape: false);
+
+    Website::factory()->create(['contact_id' => $client->id]);
+
+    Livewire::test(ContactWebsitesTable::class, ['contactId' => $client->id])
+        ->assertDontSee('Nessun sito')
+        ->assertSee('Nuovo sito')
+        ->assertSee("contact_id={$client->id}", escape: false);
+});
+
+it('opens the create form already knowing the client it was reached from', function (): void {
+    $client = Studio::client();
+
+    $this->get("/admin/websites/create?contact_id={$client->id}")->assertOk()->assertSee('Pasticceria Bellavista');
+
+    Livewire::withQueryParams(['contact_id' => (string) $client->id])
+        ->test(CreateWebsite::class)
+        ->assertSchemaStateSet(['contact_id' => $client->id, 'uptime_enabled' => true]);
+
+    Livewire::withQueryParams(['contact_id' => 'abc'])
+        ->test(CreateWebsite::class)
+        ->assertSchemaStateSet(['contact_id' => null]);
 });

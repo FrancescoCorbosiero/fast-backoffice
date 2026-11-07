@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Repositories\Enums;
 
+use App\Modules\Repositories\Support\GitUrl;
+
 enum RepositoryProvider: string
 {
     case GitHub = 'github';
@@ -23,7 +25,7 @@ enum RepositoryProvider: string
 
     public static function fromUrl(string $url): self
     {
-        $host = mb_strtolower((string) parse_url($url, PHP_URL_HOST));
+        $host = GitUrl::host($url) ?? '';
 
         return match (true) {
             str_ends_with($host, 'github.com') => self::GitHub,

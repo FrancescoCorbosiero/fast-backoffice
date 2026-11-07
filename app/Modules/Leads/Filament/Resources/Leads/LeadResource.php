@@ -45,6 +45,8 @@ class LeadResource extends Resource
 
     protected static ?string $slug = 'leads';
 
+    protected static ?string $recordTitleAttribute = 'name';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -95,6 +97,34 @@ class LeadResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'company', 'email'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        if (! $record instanceof Lead) {
+            return [];
+        }
+
+        return array_filter([
+            'Azienda' => $record->company,
+            'Stato' => $record->status->label(),
+        ], fn (?string $value): bool => $value !== null);
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): ?string
+    {
+        return static::getUrl('view', ['record' => $record]);
     }
 
     public static function getPages(): array
