@@ -1,0 +1,29 @@
+# Overlay for a VPS where an external caddy-docker-proxy already owns ports
+# 80/443 and routes by Docker labels (runbook §2b):
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.proxy.yml --env-file .env.production up -d --build
+#
+# "web" publishes no ports, speaks plain HTTP on the "caddy" network and
+# tells the proxy which host to route; TLS stays with the proxy.
+
+networks:
+  caddy:
+    external: true
+
+services:
+  web:
+    ports: !override []
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.production}
+      ACME_EMAIL: unused@proxy
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./docker/prod/Caddyfile.proxy:/etc/caddy/Caddyfile:ro
+    networks:
+      - default
+      - caddy
+    labels:
+      caddy: ${DOMAIN}
+      caddy.reverse_proxy: '{{upstreams 80}}'
+      caddy.header.Strict-Transport-Security: '"max-age=31536000; includeSubDomains"'
