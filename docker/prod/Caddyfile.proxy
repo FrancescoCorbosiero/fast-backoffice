@@ -9,7 +9,7 @@
 }
 
 :80 {
-    root * /srv/public
+    root * /var/www/html/public
     encode zstd gzip
 
     header {
