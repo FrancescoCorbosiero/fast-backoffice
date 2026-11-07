@@ -24,18 +24,28 @@ final readonly class ClaudeCli
 
     public const array DISALLOWED = ['WebFetch', 'WebSearch', 'Task', 'NotebookEdit'];
 
+    /**
+     * The CLI's Bash tool needs a POSIX shell it can find through SHELL
+     * ("No suitable shell found" otherwise): the allowlisted environment
+     * has none, so the CLI, and only the CLI, gets bash (the worker image
+     * installs it).
+     */
+    public const string SHELL = '/bin/bash';
+
     public function __construct(
         private CommandRunner $commands,
         private PipelineConfig $config,
     ) {}
 
     /**
-     * @param  array<string, string>  $env  git identity and the like; the API key is added here
+     * @param  array<string, string>  $env  git identity and the like; SHELL and the API key are added here
      */
     public function run(string $prompt, string $cwd, ?string $systemPromptFile, array $env = []): CliOutcome
     {
         $argv = $this->argv($prompt, $systemPromptFile);
         $timeout = $this->config->timeoutSeconds();
+
+        $env['SHELL'] = self::SHELL;
 
         $apiKey = $this->config->anthropicApiKey();
         if ($apiKey !== null) {

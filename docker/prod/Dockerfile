@@ -57,9 +57,10 @@ FROM app AS worker
 USER root
 
 # git and ssh for the clients' repositories, Node for static-site builds and
-# the CLI, a writable home for the CLI's own files. Add Hugo or other
+# the CLI, bash for the CLI's Bash tool (it looks for SHELL, which the CLI
+# alone is given as /bin/bash), a writable home for the CLI's own files. Add Hugo or other
 # generators here as the sites need them.
-RUN apk add --no-cache git openssh-client nodejs npm \
+RUN apk add --no-cache bash git openssh-client nodejs npm \
     && npm install -g @anthropic-ai/claude-code \
     && npm cache clean --force \
     && mkdir -p /home/www-data /var/www/html/storage/app/pipeline /var/www/html/storage/app/previews \

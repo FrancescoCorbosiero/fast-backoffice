@@ -66,14 +66,14 @@ it('runs the request on its branch, builds the preview, pushes the branch and wa
         ->and($prompt)->toContain('- content')->toContain('- layouts')->toContain('Pasticceria Bellavista')
         ->and(implode(' ', $claude['argv']))->toContain('--bare')->toContain('--strict-mcp-config')->toContain('--output-format json')->toContain('--max-budget-usd 5.00')->toContain('--setting-sources user')->toContain('--append-system-prompt-file')
         ->and($claude['argv'])->not->toContain('--dangerously-skip-permissions')
-        ->and($claude['env'])->toHaveKey('GIT_CONFIG_KEY_0', 'core.hooksPath')->not->toHaveKey('GIT_SSH_COMMAND')->not->toHaveKey('ANTHROPIC_API_KEY');
+        ->and($claude['env'])->toHaveKey('GIT_CONFIG_KEY_0', 'core.hooksPath')->toHaveKey('SHELL', '/bin/bash')->not->toHaveKey('GIT_SSH_COMMAND')->not->toHaveKey('ANTHROPIC_API_KEY');
 
     // Credentials reach git when it talks to origin, and nothing else.
     expect($fake->calls('git clone')[0]['env'])->toHaveKey('GIT_SSH_COMMAND')
         ->and($fake->calls('git push')[0]['env'])->toHaveKey('GIT_SSH_COMMAND')
         ->and($fake->calls('git checkout')[0]['env'])->not->toHaveKey('GIT_SSH_COMMAND')
         ->and($fake->calls('git rev-list')[0]['env'])->not->toHaveKey('GIT_SSH_COMMAND')
-        ->and($fake->calls('sh -c')[0]['env'])->not->toHaveKey('GIT_SSH_COMMAND');
+        ->and($fake->calls('sh -c')[0]['env'])->not->toHaveKey('GIT_SSH_COMMAND')->not->toHaveKey('SHELL');
     config()->set('pipeline.anthropic_api_key', 'sk-test');
     $withKey = ChangeRequest::factory()->status(ChangeRequestStatus::Queued)->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id, 'branch' => 'req/48']);
     runJob($withKey);
