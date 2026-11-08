@@ -32,6 +32,7 @@ final readonly class PipelineRunner
         private ClaudeCli $claude,
         private PipelineConfig $config,
         private CacheFactory $cache,
+        private WorkspaceUploads $uploads,
     ) {}
 
     public function workspace(int $websiteId): string
@@ -105,8 +106,14 @@ final readonly class PipelineRunner
     /**
      * The headless run on a fresh branch: what the CLI did, what it
      * touched, whether the policy accepts it, and whether it committed.
+     * The request's photos, when there are any, wait for the CLI in an
+     * untracked pipeline-uploads/ folder that is gone again before the
+     * gate looks (docs/pipeline.md §10): only what the agent moved out of
+     * it and committed is part of the change.
+     *
+     * @param  list<WorkspaceUpload>  $uploads
      */
-    public function run(string $dir, string $defaultBranch, string $branch, string $prompt, PathPolicy $policy, ?string $systemPrompt = null): RunOutcome
+    public function run(string $dir, string $defaultBranch, string $branch, string $prompt, PathPolicy $policy, ?string $systemPrompt = null, array $uploads = []): RunOutcome
     {
         BranchName::assert($defaultBranch);
         BranchName::assert($branch);
@@ -124,8 +131,14 @@ final readonly class PipelineRunner
         // repository's git configuration is put back as it was, so a run can't
         // redirect pushes, add filters or change where hooks live.
         $gitConfig = is_file($dir.'/.git/config') ? (string) file_get_contents($dir.'/.git/config') : null;
+        $staged = false;
 
         try {
+            if ($uploads !== []) {
+                $this->uploads->create($dir);
+                $staged = true;
+                $this->uploads->fill($dir, $uploads);
+            }
             $cli = $this->claude->run($prompt, $dir, $promptFile, $this->gitEnv());
         } finally {
             if ($promptFile !== null) {
@@ -138,6 +151,10 @@ final readonly class PipelineRunner
                 if (is_file($dir.'/.git/'.$file)) {
                     unlink($dir.'/.git/'.$file);
                 }
+            }
+            // Untracked leftovers are not a violation: the folder goes before the gate.
+            if ($staged) {
+                $this->uploads->remove($dir);
             }
         }
 

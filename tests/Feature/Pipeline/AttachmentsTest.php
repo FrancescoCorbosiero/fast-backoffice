@@ -13,10 +13,12 @@ use App\Modules\Pipeline\Data\ChangeRequestData;
 use App\Modules\Pipeline\Data\ChangeRequestInput;
 use App\Modules\Pipeline\Enums\ChangeRequestStatus;
 use App\Modules\Pipeline\Enums\ImageFormat;
+use App\Modules\Pipeline\Jobs\PruneAttachments;
 use App\Modules\Pipeline\Jobs\RunStaticSiteRequest;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Models\ChangeRequestAttachment;
 use App\Modules\Pipeline\Support\Images\ExifOrientation;
+use App\Modules\Scheduling\JobRegistry;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -262,4 +264,55 @@ it('keeps the photos when the website\'s pipeline is unlinked', function (): voi
 
     expect(ChangeRequestAttachment::query()->whereKey($attachment->id)->exists())->toBeTrue()
         ->and(Storage::disk('pipeline-uploads')->exists($attachment->stored_path))->toBeTrue();
+});
+
+it('deletes the photos of requests over for more than 90 days, keeps their rows, and does nothing more the second time', function (): void {
+    $over = fn (ChangeRequestStatus $status, int $daysAgo): ChangeRequest => ChangeRequest::factory()->status($status)->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id, 'finished_at' => now()->subDays($daysAgo)]);
+    $deployed = $over(ChangeRequestStatus::Deployed, 91);
+    $rejected = $over(ChangeRequestStatus::Rejected, 200);
+    $recent = $over(ChangeRequestStatus::Failed, 89);
+    $open = ChangeRequest::factory()->previewReady()->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id, 'updated_at' => now()->subDays(300)]);
+    $gone = [Site::attach($deployed, ImageFixtures::jpeg(), 'a.jpg', 1), Site::attach($deployed, ImageFixtures::png(), 'b.png', 2), Site::attach($rejected, ImageFixtures::webp(), 'c.webp')];
+    $kept = [Site::attach($recent, ImageFixtures::jpeg(), 'd.jpg'), Site::attach($open, ImageFixtures::jpeg(), 'e.jpg')];
+
+    $job = app(JobRegistry::class)->get('pipeline.prune-attachments');
+    expect($job)->toBeInstanceOf(PruneAttachments::class)
+        ->and($job->defaultCron())->toBe('40 3 * * *');
+    $result = $job->run();
+
+    expect($result->succeeded())->toBeTrue()->and($result->output)->toBe('3 foto rimosse da 2 richieste.');
+    foreach ($gone as $attachment) {
+        expect($attachment->refresh()->removed_at?->toDateTimeString())->toBe('2026-03-15 10:00:00')
+            ->and(Storage::disk('pipeline-uploads')->exists($attachment->stored_path))->toBeFalse();
+    }
+    foreach ($kept as $attachment) {
+        expect($attachment->refresh()->removed_at)->toBeNull()
+            ->and(Storage::disk('pipeline-uploads')->exists($attachment->stored_path))->toBeTrue();
+    }
+    $entry = collect(app(AuditTrail::class)->forSubject(Reference::to('change_request', $deployed->id)))->firstWhere('action', 'pipeline.change_request.attachments_removed');
+    expect($entry?->details)->toBe(['files' => 2, 'keep_days' => 90])
+        ->and($deployed->refresh()->toData()->attachments[0]->isRemoved())->toBeTrue();
+
+    expect($job->run()->output)->toBe('0 foto rimosse da 0 richieste.');
+});
+
+it('deletes a removed photo that came back from a restore, and after a day a file no row knows', function (): void {
+    $request = ChangeRequest::factory()->status(ChangeRequestStatus::Deployed)->create(['contact_id' => $this->site['contact']->id, 'website_id' => $this->site['website']->id, 'finished_at' => now()->subDays(100)]);
+    $photo = Site::attach($request, ImageFixtures::jpeg(), 'a.jpg', 1, ['removed_at' => now()->subDays(10)]);
+    $disk = Storage::disk('pipeline-uploads');
+    $orphan = '01jq0000000000000000000000.jpg';
+    $fresh = '01jq0000000000000000000001.png';
+    $disk->put($orphan, 'died before its row');
+    $disk->put($fresh, 'being uploaded now');
+    $disk->put('README.txt', 'not an attachment: left alone');
+    touch($disk->path($orphan), now()->subHours(25)->getTimestamp());
+    touch($disk->path($fresh), now()->getTimestamp());
+
+    $result = app(PruneAttachments::class)->run();
+
+    expect($result->output)->toBe("0 foto rimosse da 0 richieste.\n1 foto già rimosse tornate sul disco, cancellate di nuovo.\n1 file senza richiesta cancellati.")
+        ->and($disk->exists($photo->stored_path))->toBeFalse()
+        ->and($disk->exists($orphan))->toBeFalse()
+        ->and($disk->exists($fresh))->toBeTrue()
+        ->and($disk->exists('README.txt'))->toBeTrue();
 });

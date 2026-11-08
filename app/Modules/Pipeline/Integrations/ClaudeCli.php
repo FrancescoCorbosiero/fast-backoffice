@@ -11,7 +11,7 @@ use JsonException;
 
 /**
  * `claude -p` with the flags that keep a run inside the box: a budget, a
- * timeout, only the file tools and the git commands that stage and
+ * timeout, only the file tools and the git commands that stage, move and
  * commit, no web, no MCP servers, no hooks, no settings or memory from
  * the repository (--bare: the approved CLAUDE.md is passed explicitly by
  * the runner), no session left behind. The prompt is one argv element.
@@ -20,7 +20,8 @@ final readonly class ClaudeCli
 {
     public const array TOOLS = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Bash'];
 
-    public const array ALLOWED = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)'];
+    /** git mv places a request's photo, staged from pipeline-uploads/, into the site (docs/pipeline.md §10). */
+    public const array ALLOWED = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git mv:*)'];
 
     public const array DISALLOWED = ['WebFetch', 'WebSearch', 'Task', 'NotebookEdit'];
 

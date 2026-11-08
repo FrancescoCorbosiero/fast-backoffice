@@ -16,6 +16,7 @@ use App\Modules\Pipeline\Http\Portal\SignInController;
 use App\Modules\Pipeline\Integrations\CommandRunner;
 use App\Modules\Pipeline\Integrations\SymfonyCommandRunner;
 use App\Modules\Pipeline\Jobs\DeployApprovedRequests;
+use App\Modules\Pipeline\Jobs\PruneAttachments;
 use App\Modules\Pipeline\Listeners\RepointMergedContact;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Policies\ChangeRequestPolicy;
@@ -47,7 +48,7 @@ class PipelineServiceProvider extends ModuleServiceProvider
         parent::register();
 
         $this->app->bind(CommandRunner::class, SymfonyCommandRunner::class);
-        $this->app->tag([DeployApprovedRequests::class], ScheduledJob::TAG);
+        $this->app->tag([DeployApprovedRequests::class, PruneAttachments::class], ScheduledJob::TAG);
         $this->app->tag([ChangeRequestsContactPanel::class], ContactPanel::TAG);
         $this->app->tag([PipelineWebsitePanel::class], WebsitePanel::TAG);
     }

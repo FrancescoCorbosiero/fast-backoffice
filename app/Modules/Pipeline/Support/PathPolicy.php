@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline\Support;
 
+use App\Modules\Pipeline\Data\ChangeRequestAttachmentData;
 use App\Modules\Pipeline\Data\PipelineManifest;
 
 /**
@@ -11,7 +12,8 @@ use App\Modules\Pipeline\Data\PipelineManifest;
  * this enforces them on what the run actually changed, before anything
  * is built or pushed: nothing hidden (dotfiles, .git, .claude, .github),
  * never the manifest or CLAUDE.md on a change run, never the files that
- * decide what a build command executes, and only under the manifest's
+ * decide what a build command executes, never the pipeline-uploads/
+ * folder the run's photos wait in, and only under the manifest's
  * editable paths.
  */
 final readonly class PathPolicy
@@ -73,6 +75,10 @@ final readonly class PathPolicy
         }
         if (preg_match('#(^|/)\.[^/]#', $path) === 1) {
             return 'file o cartella nascosti';
+        }
+        // The run's photos wait there to be moved into the site, never to be committed there.
+        if ($path === ChangeRequestAttachmentData::WORKSPACE_DIR || str_starts_with($path, ChangeRequestAttachmentData::WORKSPACE_DIR.'/')) {
+            return 'cartella degli allegati';
         }
         if ($protectManifest && in_array($path, self::PROTECTED, true)) {
             return 'file della pipeline';
