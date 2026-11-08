@@ -96,6 +96,9 @@ services:
       target: worker
     environment:
       APP_ENV: production
+      # Redis and cache keys are named after it: without it the worker listens
+      # on another queue than the one the app fills.
+      APP_NAME: ${APP_NAME:?}
       APP_KEY: ${APP_KEY:?}
       APP_URL: https://${DOMAIN:?}
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}

@@ -77,6 +77,19 @@ it('keeps .env files and the deploy key out of the images', function (): void {
         ->and((string) file_get_contents(base_path('docker/prod/Dockerfile')))->toContain('COPY --chown=www-data:www-data . .');
 });
 
+it('gives the pipeline worker the APP_NAME its queue and cache keys are named after', function (): void {
+    // Redis and cache keys are prefixed with a slug of APP_NAME. A worker
+    // without it listens on "laravel-database-queues:pipeline" while the app
+    // queues on "fast-backoffice-database-queues:pipeline": requests stay
+    // "In coda" for ever. The worker has no env_file, so it must be listed.
+    $compose = Symfony\Component\Yaml\Yaml::parseFile(base_path('docker-compose.prod.yml'));
+    $worker = $compose['services']['pipeline-worker']['environment'] ?? [];
+
+    expect($worker)->toHaveKey('APP_NAME')
+        ->and($worker['APP_NAME'])->toBe('${APP_NAME:?}')
+        ->and($compose['services']['app']['env_file'] ?? null)->toBe('.env.production');
+});
+
 it('debug is off unless the environment says otherwise', function (): void {
     expect((string) file_get_contents(base_path('config/app.php')))->toContain("'debug' => (bool) env('APP_DEBUG', false)")
         ->and(config('app.env'))->toBe('testing');
