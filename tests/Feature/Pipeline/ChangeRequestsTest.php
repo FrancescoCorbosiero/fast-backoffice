@@ -144,7 +144,8 @@ it('allows exactly the transitions of the lifecycle', function (): void {
     $allowed = [
         'received' => ['queued'],
         'queued' => ['running'],
-        'running' => ['preview_ready', 'failed'],
+        'running' => ['preview_ready', 'failed', 'needs_input'],
+        'needs_input' => ['queued'],
         'preview_ready' => ['approved', 'rejected'],
         'approved' => ['deployed', 'failed'],
         'rejected' => [],

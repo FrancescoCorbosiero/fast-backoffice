@@ -46,6 +46,11 @@
         .badge.info { background: #dbeafe; color: var(--info); }
         .flash { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
         .request-text { white-space: pre-wrap; }
+        fieldset.question { border: 0; padding: 0; margin: 0 0 18px; }
+        fieldset.question legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+        label.choice { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 8px 0 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+        label.choice input { margin-top: 3px; }
+        .turn { border-left: 3px solid var(--line); padding-left: 12px; margin-top: 12px; }
         .preview { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
         ul.paths { padding-left: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
         input[type=file] { width: 100%; font: inherit; font-size: 15px; padding: 10px 0; }

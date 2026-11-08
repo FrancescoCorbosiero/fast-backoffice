@@ -72,7 +72,7 @@ final readonly class LinkRepository
         [$pipeline, $request] = $this->db->transaction(function () use ($website, $repository, $kind, $contact): array {
             $open = ChangeRequest::query()->where('website_id', $website->id)->whereIn('status', [
                 ChangeRequestStatus::Received->value, ChangeRequestStatus::Queued->value, ChangeRequestStatus::Running->value,
-                ChangeRequestStatus::PreviewReady->value, ChangeRequestStatus::Approved->value,
+                ChangeRequestStatus::PreviewReady->value, ChangeRequestStatus::Approved->value, ChangeRequestStatus::NeedsInput->value,
             ])->lockForUpdate()->exists();
             if ($open) {
                 throw new LogicException("Website {$website->id} has an open request: finish it before linking a repository.");

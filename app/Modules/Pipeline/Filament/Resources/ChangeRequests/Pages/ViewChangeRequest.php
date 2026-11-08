@@ -80,6 +80,19 @@ class ViewChangeRequest extends ViewRecord
                 TextEntry::make('r_text')->label('')->state($data->requestText)->html()->formatStateUsing(fn (string $state): string => nl2br(e($state))),
             ]),
         ];
+        if ($data->conversation !== []) {
+            $turns = [];
+            foreach ($data->conversation as $index => $turn) {
+                $body = e($turn->text);
+                foreach ($turn->questions as $question) {
+                    $body .= "\n• ".e($question->question).($question->options === [] ? '' : ' <span class="text-gray-500">('.e(implode(' / ', $question->options)).')</span>');
+                }
+                $turns[] = TextEntry::make('c_'.$index)
+                    ->label(($turn->isAgent() ? 'Domanda dell\'agente' : 'Risposta del cliente').' · '.$turn->at->isoFormat('D MMM YYYY HH:mm'))
+                    ->state($body)->html()->formatStateUsing(fn (string $state): string => nl2br($state));
+            }
+            $components[] = Section::make($data->awaitsAnswer() ? 'Scambio con il cliente (aspetta la sua risposta)' : 'Scambio con il cliente')->compact()->components($turns);
+        }
         if ($data->attachments !== []) {
             $components[] = Section::make('Foto allegate')->compact()->components([
                 View::make('pipeline.attachments')->viewData(['attachments' => array_map(fn (ChangeRequestAttachmentData $attachment): array => [
