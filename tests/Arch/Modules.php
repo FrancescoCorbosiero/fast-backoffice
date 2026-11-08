@@ -180,6 +180,27 @@ final readonly class Modules
     }
 
     /**
+     * Lines under app/ that match a pattern: for what Pest's arch can't
+     * see, such as a class the running PHP doesn't have.
+     *
+     * @return list<string> "path:line"
+     */
+    public static function lineMatches(string $pattern): array
+    {
+        $found = [];
+
+        foreach (self::phpFiles(self::basePath('app')) as $file) {
+            foreach (file($file) ?: [] as $number => $line) {
+                if (preg_match($pattern, $line) === 1) {
+                    $found[] = self::relative($file).':'.($number + 1);
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * "File:line" for every call of one of the methods under app/, except
      * under the given path.
      *

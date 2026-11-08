@@ -8,6 +8,8 @@ RUN install-php-extensions intl pdo_pgsql pgsql redis gd zip bcmath pcntl opcach
     && apt-get install -y --no-install-recommends git unzip postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
+COPY docker/dev/php.ini "$PHP_INI_DIR/conf.d/99-fast-backoffice.ini"
+
 WORKDIR /var/www/html
 
 EXPOSE 8000

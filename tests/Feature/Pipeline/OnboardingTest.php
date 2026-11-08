@@ -11,8 +11,10 @@ use App\Modules\Pipeline\Jobs\MergeOnboarding;
 use App\Modules\Pipeline\Jobs\OnboardRepository;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Tests\Feature\Pipeline\Site;
 use Tests\Support\FakeCommandRunner;
+use Tests\Support\ImageFixtures;
 
 beforeEach(function (): void {
     $this->fake = Site::fake();
@@ -144,4 +146,21 @@ it('refuses to merge an onboarding branch that is not fast-forward or touches ot
         ->and($this->request->error)->toContain('fast-forward')
         ->and($this->site['pipeline']->refresh()->status)->toBe(PipelineStatus::Onboarding)
         ->and($this->fake->ran('git push'))->toBeFalse();
+});
+
+it('ignores photos: an onboarding run gets no pipeline-uploads folder and no list of images', function (): void {
+    Storage::fake('pipeline-uploads');
+    Site::attach($this->request, ImageFixtures::jpeg());
+    $sawFolder = null;
+    $this->fake->on('claude', function (array $argv, string $cwd) use (&$sawFolder): App\Modules\Pipeline\Data\CommandResult {
+        $sawFolder = file_exists($cwd.'/pipeline-uploads');
+
+        return FakeCommandRunner::ok((string) json_encode(['type' => 'result', 'is_error' => false, 'result' => 'Sito Hugo.', 'total_cost_usd' => 0.01]));
+    });
+
+    $request = onboard($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::PreviewReady)
+        ->and($sawFolder)->toBeFalse()
+        ->and($this->fake->calls('claude')[0]['argv'][2])->not->toContain('pipeline-uploads');
 });

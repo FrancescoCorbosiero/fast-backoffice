@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline\Models;
 
+use App\Modules\Pipeline\Data\ChangeRequestAttachmentData;
 use App\Modules\Pipeline\Data\ChangeRequestData;
 use App\Modules\Pipeline\Database\Factories\ChangeRequestFactory;
 use App\Modules\Pipeline\Enums\ChangeRequestKind;
@@ -11,8 +12,11 @@ use App\Modules\Pipeline\Enums\ChangeRequestStatus;
 use App\Modules\Pipeline\Enums\DecidedBy;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Date;
 use LogicException;
 
 /**
@@ -37,8 +41,10 @@ use LogicException;
  * @property ?CarbonImmutable $decided_at
  * @property ?CarbonImmutable $deploy_started_at
  * @property ?int $cost_cents
+ * @property ?CarbonImmutable $finished_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property-read Collection<int, ChangeRequestAttachment> $attachments
  */
 class ChangeRequest extends Model
 {
@@ -68,6 +74,7 @@ class ChangeRequest extends Model
             'decided_at' => 'immutable_datetime',
             'deploy_started_at' => 'immutable_datetime',
             'cost_cents' => 'integer',
+            'finished_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -76,6 +83,16 @@ class ChangeRequest extends Model
     protected static function newFactory(): ChangeRequestFactory
     {
         return ChangeRequestFactory::new();
+    }
+
+    /**
+     * The images the request carries, in the order the client gave them.
+     *
+     * @return HasMany<ChangeRequestAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ChangeRequestAttachment::class)->orderBy('position');
     }
 
     /**
@@ -90,6 +107,8 @@ class ChangeRequest extends Model
     /**
      * The one way the status moves: refused when the lifecycle doesn't
      * allow it, so a late or repeated job never moves a request backwards.
+     * Reaching an end (deployed, rejected, failed) stamps finished_at, the
+     * clock the attachments are kept by.
      *
      * @param  array<string, mixed>  $attributes  written together with the status
      *
@@ -99,6 +118,10 @@ class ChangeRequest extends Model
     {
         if (! $this->status->canBecome($next)) {
             throw new LogicException("Change request {$this->id} is {$this->status->value}: it can't become {$next->value}.");
+        }
+
+        if ($next->isTerminal()) {
+            $attributes['finished_at'] ??= Date::now();
         }
 
         $this->forceFill([...$attributes, 'status' => $next])->save();
@@ -136,6 +159,7 @@ class ChangeRequest extends Model
             costCents: $this->cost_cents,
             createdAt: $this->created_at,
             updatedAt: $this->updated_at,
+            attachments: array_values($this->attachments->map(fn (ChangeRequestAttachment $attachment): ChangeRequestAttachmentData => $attachment->toData())->all()),
         );
     }
 }

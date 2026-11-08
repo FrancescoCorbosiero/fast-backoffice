@@ -19,6 +19,8 @@ use App\Modules\Pipeline\Support\PreviewCopier;
 use App\Modules\Pipeline\Support\PromptBuilder;
 use App\Modules\Pipeline\Support\RefusedRun;
 use App\Modules\Pipeline\Support\WorkspaceBusyException;
+use App\Modules\Pipeline\Support\WorkspaceUpload;
+use App\Modules\Pipeline\Support\WorkspaceUploads;
 use App\Modules\Repositories\Queries\Repositories;
 use App\Modules\Websites\Queries\Websites;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -27,10 +29,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * The body of RunStaticSiteRequest: the run on req/<id>, the path gate,
- * the manifest's build, the preview, the push. Anything that goes wrong
- * ends the request as failed, with the reason for the owner and the
- * client.
+ * The body of RunStaticSiteRequest: the run on req/<id> (with the
+ * request's photos waiting in pipeline-uploads/), the path gate, the
+ * manifest's build, the preview, the push. Anything that goes wrong ends
+ * the request as failed, with the reason for the owner and the client.
  */
 final readonly class RunChangeRequest
 {
@@ -96,7 +98,16 @@ final readonly class RunChangeRequest
         $manifest = $this->manifests->read($manifestText);
         $systemPrompt = $this->runner->show($dir, 'origin/'.$repository->defaultBranch, 'CLAUDE.md');
 
-        $outcome = $this->runner->run($dir, $repository->defaultBranch, $request->branch, $this->prompts->change($request->toData(), $website, $manifest), PathPolicy::forManifest($manifest), $systemPrompt);
+        // The photos still kept, in the client's order, under the names the prompt lists.
+        $data = $request->load('attachments')->toData();
+        $uploads = [];
+        foreach ($request->attachments as $attachment) {
+            if ($attachment->removed_at === null) {
+                $uploads[] = new WorkspaceUpload($attachment->toData()->workspaceName(), $attachment->stored_path, $attachment->sha256);
+            }
+        }
+
+        $outcome = $this->runner->run($dir, $repository->defaultBranch, $request->branch, $this->prompts->change($data, $website, $manifest), PathPolicy::forManifest($manifest), $systemPrompt, $uploads);
         $request->appendLog($outcome->log);
         $request->forceFill(['cost_cents' => $outcome->costCents, 'touched_paths' => $outcome->touchedPaths])->save();
 
@@ -104,7 +115,11 @@ final readonly class RunChangeRequest
             throw new RefusedRun((string) $outcome->failure, 'Non siamo riusciti a completare la richiesta: lo studio la riguarderà.');
         }
         if ($outcome->wasRefused()) {
-            throw new RefusedRun('La modifica tocca file fuori dai percorsi consentiti: '.implode(', ', $outcome->refusedPaths), 'La modifica avrebbe toccato parti del sito che non si possono cambiare da qui: lo studio la riguarderà.');
+            $photos = array_filter($outcome->refusedPaths, fn (string $path): bool => str_starts_with($path, WorkspaceUploads::DIR.'/'));
+            throw new RefusedRun(
+                'La modifica tocca file fuori dai percorsi consentiti: '.implode(', ', $outcome->refusedPaths).($photos === [] ? '' : '. Le foto vanno spostate con git mv fuori da '.WorkspaceUploads::DIR.'/, non committate lì.'),
+                'La modifica avrebbe toccato parti del sito che non si possono cambiare da qui: lo studio la riguarderà.',
+            );
         }
         if (! $outcome->hasCommits) {
             $explanation = $outcome->resultText !== '' ? $outcome->resultText : 'Nessuna modifica: la richiesta non ha prodotto commit.';

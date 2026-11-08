@@ -83,3 +83,39 @@ it('keeps the panel behind the login and the public endpoints public', function 
 it('never leaks exceptions on the public endpoints', function (): void {
     $this->call('POST', '/webhooks/ses', [], [], [], [], 'not json')->assertStatus(400)->assertJson(['outcome' => 'rejected']);
 });
+
+it('lets a change request\'s photos through every layer, and keeps them private', function (): void {
+    $megabytes = function (string $value): int {
+        $number = (int) $value;
+
+        return match (strtoupper(substr(trim($value), -1))) {
+            'G' => $number * 1024,
+            'M' => $number,
+            'K' => intdiv($number, 1024),
+            default => intdiv($number, 1024 * 1024),
+        };
+    };
+    $maxMb = (int) config('pipeline.attachments.max_mb');
+    $totalMb = (int) config('pipeline.attachments.max_total_mb');
+
+    // PHP takes a photo of max_mb, and every photo of a request in one POST; Cloudflare stops bodies over 100 MB.
+    foreach (['docker/prod/php.ini', 'docker/dev/php.ini'] as $file) {
+        $ini = parse_ini_file(base_path($file));
+        expect($ini)->toBeArray()
+            ->and($megabytes((string) $ini['upload_max_filesize']))->toBeGreaterThanOrEqual($maxMb)
+            ->and($megabytes((string) $ini['post_max_size']))->toBeGreaterThan($totalMb)->toBeLessThanOrEqual(100);
+    }
+    expect($totalMb)->toBeLessThan(100)
+        ->and(config('livewire.temporary_file_upload.rules'))->toContain('max:'.($maxMb * 1024));
+
+    // A private local disk, never served, on the volume app, scheduler and the worker (read-only) share.
+    expect(config('filesystems.disks.pipeline-uploads'))->toMatchArray(['driver' => 'local', 'serve' => false, 'visibility' => 'private'])
+        ->and((string) config('filesystems.disks.pipeline-uploads.root'))->not->toStartWith(public_path());
+    $compose = Symfony\Component\Yaml\Yaml::parseFile(base_path('docker-compose.prod.yml'));
+    $mount = 'pipeline_uploads:/var/www/html/storage/app/pipeline-uploads';
+    expect($compose['services']['app']['volumes'])->toContain($mount)
+        ->and($compose['services']['scheduler']['volumes'])->toContain($mount)
+        ->and($compose['services']['pipeline-worker']['volumes'])->toContain($mount.':ro')
+        ->and($compose['services']['backup']['volumes'])->toContain('pipeline_uploads:/srv/pipeline-uploads')
+        ->and($compose['volumes'])->toHaveKey('pipeline_uploads');
+});

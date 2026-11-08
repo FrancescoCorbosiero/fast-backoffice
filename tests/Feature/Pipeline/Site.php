@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Pipeline;
 
 use App\Modules\Contacts\Models\Contact;
+use App\Modules\Pipeline\Enums\ImageFormat;
 use App\Modules\Pipeline\Enums\PipelineStatus;
 use App\Modules\Pipeline\Integrations\CommandRunner;
+use App\Modules\Pipeline\Models\ChangeRequest;
+use App\Modules\Pipeline\Models\ChangeRequestAttachment;
 use App\Modules\Pipeline\Models\WebsitePipeline;
+use App\Modules\Pipeline\Support\AttachmentStore;
+use App\Modules\Pipeline\Support\Images\ImageSanitizer;
 use App\Modules\Pipeline\Support\PreviewCopier;
 use App\Modules\Repositories\Models\Repository;
 use App\Modules\Websites\Models\Website;
@@ -52,5 +57,29 @@ final class Site
     public static function previewDir(string $slug): string
     {
         return storage_path('framework/testing/pipeline/previews/'.$slug);
+    }
+
+    /**
+     * A photo on a request, as SubmitChangeRequest would have stored it:
+     * cleaned, on the attachments disk (fake it first), with its row.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public static function attach(ChangeRequest $request, string $bytes, string $name = 'foto.jpg', int $position = 1, array $attributes = []): ChangeRequestAttachment
+    {
+        $image = (new ImageSanitizer)->sanitize($bytes, ImageFormat::cases(), 50);
+
+        return ChangeRequestAttachment::factory()->create([
+            'change_request_id' => $request->id,
+            'original_name' => $name,
+            'stored_path' => app(AttachmentStore::class)->put($image->bytes, $image->format),
+            'mime' => $image->format,
+            'size_bytes' => strlen($image->bytes),
+            'sha256' => hash('sha256', $image->bytes),
+            'width' => $image->width,
+            'height' => $image->height,
+            'position' => $position,
+            ...$attributes,
+        ]);
     }
 }

@@ -7,15 +7,15 @@ How fast-backoffice runs in production (design.md §7), and what to do when some
 | Service | Image / command | Notes |
 |---|---|---|
 | `web` | `fast-backoffice/web` (Caddy) | Ports 80/443, Let's Encrypt for `$DOMAIN`, serves `public/`, FastCGI to `fast-backoffice-fpm:9000` (the `app` container's alias: on a shared proxy network a plain `app` could be another stack's) |
-| `app` | `fast-backoffice/app`, `php-fpm` | The panel, the client portal (`/area-clienti/`) and the webhooks (`/webhooks/calcom`, `/webhooks/ses`, `/unsubscribe/{token}`) |
+| `app` | `fast-backoffice/app`, `php-fpm` | The panel, the client portal (`/area-clienti/`) and the webhooks (`/webhooks/calcom`, `/webhooks/ses`, `/unsubscribe/{token}`). Volume `pipeline_uploads`: the change requests' photos (docs/pipeline.md §10) |
 | `horizon` | same image, `php artisan horizon` | Queue: campaign emails. Dashboard at `/horizon`, owner only |
-| `scheduler` | same image, `php artisan schedule:work` | The Scheduling module's jobs (`/admin/jobs` lists them) |
-| `pipeline-worker` | `fast-backoffice/worker` (the app image plus git, Node and the Claude Code CLI), `php artisan queue:work redis-pipeline` | The only consumer of the pipeline queue (docs/pipeline.md §3): change requests, onboarding, deploys. Volumes `pipeline-workspace` and `previews` |
+| `scheduler` | same image, `php artisan schedule:work` | The Scheduling module's jobs (`/admin/jobs` lists them). Volume `pipeline_uploads`, for `pipeline.prune-attachments` |
+| `pipeline-worker` | `fast-backoffice/worker` (the app image plus git, Node and the Claude Code CLI), `php artisan queue:work redis-pipeline` | The only consumer of the pipeline queue (docs/pipeline.md §3): change requests, onboarding, deploys. Volumes `pipeline-workspace`, `previews` and `pipeline_uploads` (read-only) |
 | `pgsql` | `postgres:18-alpine` | Volume `pgsql` |
 | `redis` | `redis:7-alpine`, AOF on | Sessions, cache, queue |
-| `backup` | `docker/backup` | `pg_dump` to S3 nightly at `BACKUP_HOUR` |
+| `backup` | `docker/backup` | `pg_dump` to S3 nightly at `BACKUP_HOUR`, and the mirror of the `pipeline_uploads` volume |
 
-Files (PDFs, XML, PEC envelopes) are in the S3-compatible bucket `FILES_S3_BUCKET`: turn **versioning** on there; that is their backup.
+Files (PDFs, XML, PEC envelopes) are in the S3-compatible bucket `FILES_S3_BUCKET`: turn **versioning** on there; that is their backup. The change requests' photos are not: the pipeline worker never holds S3 credentials, so they live on the `pipeline_uploads` volume, mirrored nightly to the backup bucket (§4).
 
 ## 2. First deploy
 
@@ -63,6 +63,14 @@ docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:termi
 
 Migrations run by hand, after the new `app` is up and before the workers restart: the entrypoint only caches configuration, so a container restart never changes the schema by surprise. `horizon:terminate` makes Horizon finish its current jobs and restart on the new code.
 
+Then the pipeline worker and the backup, when no request is running (Asset › Richieste di modifica shows none "In lavorazione"; a run cut short ends failed, and "Ripeti richiesta" starts it again):
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --no-deps pipeline-worker backup
+```
+
+The release that brought photos to change requests creates the `pipeline_uploads` volume: `app`, `scheduler`, `pipeline-worker` and `backup` all mount it, so all four are recreated by these steps. The images create its mount point owned by `www-data` (uid 82), and a new volume takes that owner.
+
 Rollback: `git checkout <previous tag>` and the same steps. Migrations in this project add tables and columns; they are not rolled back in production, the old code ignores what it doesn't know.
 
 ## 4. Backups and the restore drill
@@ -72,6 +80,8 @@ The `backup` service dumps the database every night (`pg_dump`, custom format, c
 ```bash
 docker compose -f docker-compose.prod.yml exec backup backup
 ```
+
+The same run mirrors the change requests' photos (the `pipeline_uploads` volume) to `s3://$BACKUP_S3_BUCKET/$BACKUP_S3_UPLOADS_PREFIX/` with `aws s3 sync --delete`: a photo the retention job deleted (docs/pipeline.md §10) goes from the mirror too. Turn **versioning** on for the backup bucket, with a lifecycle rule that expires noncurrent versions after `BACKUP_KEEP_DAYS`: a dump restored from a few days back still finds its photos among the earlier versions, and nothing outlives the retention by more than that.
 
 **Restore drill, once a month.** It restores the latest dump into a scratch database next to the live one and counts contacts and invoices; nothing touches production:
 
@@ -85,21 +95,31 @@ Expect `restored <name> into fast_backoffice_restore_test: N contacts, M invoice
 docker compose -f docker-compose.prod.yml exec pgsql psql -U "$DB_USERNAME" -d postgres -c 'DROP DATABASE fast_backoffice_restore_test;'
 ```
 
+The photos' half of the drill restores the mirror into a scratch folder in the `backup` container, checks five photos stored before last night against their checksums in the database, and removes the folder:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backup restore-uploads
+```
+
+Expect `restored N files into /tmp/pipeline-uploads-restore-test: 5 of 5 sampled checksums match` (fewer than five when fewer photos are kept).
+
 **Restoring production for real** (after a disaster, on a fresh server with the same `.env.production`):
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d pgsql redis backup
 docker compose -f docker-compose.prod.yml exec backup restore latest fast_backoffice
+docker compose -f docker-compose.prod.yml exec backup restore-uploads /srv/pipeline-uploads
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ```
 
-Files come back from the bucket as they are (versioning covers deletions). Legal archiving of invoices is separate and not the app's job: sdi.md §8.
+Files come back from the bucket as they are (versioning covers deletions). The photos come back from their mirror into the volume, owned by `www-data`; any the retention job had already removed are deleted again by its next run. Legal archiving of invoices is separate and not the app's job: sdi.md §8.
 
 ## 5. Day to day
 
 - **Logs**: `docker compose -f docker-compose.prod.yml logs -f app horizon scheduler web`. The app logs to stderr (`LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`).
 - **Jobs**: Sistema › Attività programmate shows every scheduled job, its last runs and lets you run one now. Horizon at `/horizon` shows the queue, except the pipeline queue, which the `pipeline-worker` consumes outside Horizon: `docker compose -f docker-compose.prod.yml logs -f pipeline-worker`, the request's own log and error in Asset › Richieste di modifica, and `exec app php artisan queue:failed`. An approved request that never deployed: `exec app php artisan scheduling:run pipeline.deploy-approved`.
 - **PEC**: Sistema › Casella PEC lists every message read; what needs a human is flagged and counted on the dashboard.
+- **Photos**: `pipeline.prune-attachments` deletes, every night at 03:40, the photos of requests over for more than 90 days (the rows stay, marked removed). Run it now: `exec app php artisan scheduling:run pipeline.prune-attachments`.
 - **Audit**: Sistema › Audit, every fiscal and settings change.
 - **Maintenance mode**: `exec app php artisan down --secret=<word>` and `up`.
 - **Health**: `GET /up` (used by uptime monitors).

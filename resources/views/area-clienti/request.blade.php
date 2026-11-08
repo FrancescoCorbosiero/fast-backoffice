@@ -13,6 +13,26 @@
         <div class="card">
             <h2>Cosa hai chiesto</h2>
             <p class="request-text">{{ $request->requestText }}</p>
+            @if ($request->attachments !== [])
+                <details class="photos">
+                    <summary>{{ count($request->attachments) === 1 ? 'La foto che hai allegato' : 'Le '.count($request->attachments).' foto che hai allegato' }}</summary>
+                    <ul>
+                        @foreach ($request->attachments as $attachment)
+                            <li>
+                                @if ($attachment->isRemoved())
+                                    <span class="photo-gone">Foto rimossa</span>
+                                @else
+                                    <a href="{{ route('portal.requests.attachment', ['id' => $request->id, 'attachment' => $attachment->id]) }}" target="_blank" rel="noopener">
+                                        <img src="{{ route('portal.requests.attachment', ['id' => $request->id, 'attachment' => $attachment->id]) }}" alt="{{ $attachment->originalName }}" loading="lazy" width="{{ $attachment->width }}" height="{{ $attachment->height }}">
+                                    </a>
+                                @endif
+                                <span class="muted">{{ $attachment->originalName }} · {{ $attachment->width }}×{{ $attachment->height }} · {{ $attachment->sizeLabel() }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p class="muted">Le foto restano qui fino a {{ $keepDays }} giorni dopo la chiusura della richiesta, poi le cancelliamo.</p>
+                </details>
+            @endif
         </div>
     @endunless
 

@@ -13,7 +13,7 @@ final readonly class ChangeRequests
 {
     public function find(int $id): ?ChangeRequestData
     {
-        return ChangeRequest::query()->find($id)?->toData();
+        return ChangeRequest::query()->with('attachments')->find($id)?->toData();
     }
 
     /**
@@ -23,7 +23,7 @@ final readonly class ChangeRequests
      */
     public function forContact(int $contactId): array
     {
-        return $this->map(ChangeRequest::query()->forContact($contactId)->orderByDesc('id')->get()->all());
+        return $this->map(ChangeRequest::query()->with('attachments')->forContact($contactId)->orderByDesc('id')->get()->all());
     }
 
     /**
@@ -33,7 +33,7 @@ final readonly class ChangeRequests
      */
     public function awaitingDecision(): array
     {
-        return $this->map(ChangeRequest::query()->where('status', ChangeRequestStatus::PreviewReady->value)->orderBy('id')->get()->all());
+        return $this->map(ChangeRequest::query()->with('attachments')->where('status', ChangeRequestStatus::PreviewReady->value)->orderBy('id')->get()->all());
     }
 
     /**
@@ -45,6 +45,7 @@ final readonly class ChangeRequests
     public function approvedNotDeploying(CarbonImmutable $staleBefore): array
     {
         return $this->map(ChangeRequest::query()
+            ->with('attachments')
             ->where('status', ChangeRequestStatus::Approved->value)
             ->where(fn ($query) => $query->whereNull('deploy_started_at')->orWhere('deploy_started_at', '<', $staleBefore))
             ->orderBy('id')->get()->all());

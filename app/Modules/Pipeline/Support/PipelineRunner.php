@@ -32,6 +32,7 @@ final readonly class PipelineRunner
         private ClaudeCli $claude,
         private PipelineConfig $config,
         private CacheFactory $cache,
+        private WorkspaceUploads $uploads,
     ) {}
 
     public function workspace(int $websiteId): string
@@ -105,8 +106,14 @@ final readonly class PipelineRunner
     /**
      * The headless run on a fresh branch: what the CLI did, what it
      * touched, whether the policy accepts it, and whether it committed.
+     * The request's photos, when there are any, wait for the CLI in an
+     * untracked pipeline-uploads/ folder that is gone again before the
+     * gate looks (docs/pipeline.md §10): only what the agent moved out of
+     * it and committed is part of the change.
+     *
+     * @param  list<WorkspaceUpload>  $uploads
      */
-    public function run(string $dir, string $defaultBranch, string $branch, string $prompt, PathPolicy $policy, ?string $systemPrompt = null): RunOutcome
+    public function run(string $dir, string $defaultBranch, string $branch, string $prompt, PathPolicy $policy, ?string $systemPrompt = null, array $uploads = []): RunOutcome
     {
         BranchName::assert($defaultBranch);
         BranchName::assert($branch);
@@ -124,8 +131,14 @@ final readonly class PipelineRunner
         // repository's git configuration is put back as it was, so a run can't
         // redirect pushes, add filters or change where hooks live.
         $gitConfig = is_file($dir.'/.git/config') ? (string) file_get_contents($dir.'/.git/config') : null;
+        $staged = false;
 
         try {
+            if ($uploads !== []) {
+                $this->uploads->create($dir);
+                $staged = true;
+                $this->uploads->fill($dir, $uploads);
+            }
             $cli = $this->claude->run($prompt, $dir, $promptFile, $this->gitEnv());
         } finally {
             if ($promptFile !== null) {
@@ -138,6 +151,10 @@ final readonly class PipelineRunner
                 if (is_file($dir.'/.git/'.$file)) {
                     unlink($dir.'/.git/'.$file);
                 }
+            }
+            // Untracked leftovers are not a violation: the folder goes before the gate.
+            if ($staged) {
+                $this->uploads->remove($dir);
             }
         }
 
@@ -176,17 +193,19 @@ final readonly class PipelineRunner
     /**
      * Paths changed between two refs, plus (optionally) what the working
      * tree holds uncommitted: modified, untracked, and untracked-but-ignored
-     * (an agent's write to .env or dist/ is a change too).
+     * (an agent's write to .env or dist/ is a change too). Read with -z:
+     * otherwise git quotes any path with a byte above 0x7F
+     * ("content/caff\303\250.md") and the gate would match nothing.
      *
      * @return list<string>
      */
     public function touched(string $dir, string $from, string $to, bool $includeWorkingTree = false): array
     {
-        $paths = $this->lines($this->gitOrFail($dir, ['diff', '--name-only', '--no-renames', $from.'...'.$to])->stdout);
+        $paths = $this->paths($this->gitOrFail($dir, ['diff', '--name-only', '-z', '--no-renames', $from.'...'.$to])->stdout);
         if ($includeWorkingTree) {
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['diff', '--name-only', '--no-renames', 'HEAD'])->stdout)];
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['ls-files', '--others', '--exclude-standard'])->stdout)];
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['ls-files', '--others', '--ignored', '--exclude-standard'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['diff', '--name-only', '-z', '--no-renames', 'HEAD'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['ls-files', '-z', '--others', '--exclude-standard'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['ls-files', '-z', '--others', '--ignored', '--exclude-standard'])->stdout)];
         }
 
         return array_values(array_unique($paths));
@@ -332,10 +351,13 @@ final readonly class PipelineRunner
     }
 
     /**
+     * git's -z output: NUL-terminated paths, neither quoted nor trimmed
+     * (a name may start or end with a space).
+     *
      * @return list<string>
      */
-    private function lines(string $output): array
+    private function paths(string $output): array
     {
-        return array_values(array_filter(array_map('trim', explode("\n", $output)), fn (string $line): bool => $line !== ''));
+        return array_values(array_filter(explode("\0", $output), fn (string $path): bool => $path !== ''));
     }
 }

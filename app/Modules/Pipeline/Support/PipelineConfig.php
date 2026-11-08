@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline\Support;
 
+use App\Modules\Pipeline\Enums\ImageFormat;
 use Illuminate\Contracts\Config\Repository;
 
 /**
@@ -112,6 +113,75 @@ final readonly class PipelineConfig
         $value = $this->string('pipeline.queue.name');
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * The private disk the attachments live on (config/filesystems.php).
+     */
+    public function attachmentsDisk(): string
+    {
+        $disk = $this->string('pipeline.attachments.disk');
+
+        return $disk === '' ? 'pipeline-uploads' : $disk;
+    }
+
+    public function maxAttachments(): int
+    {
+        return max(1, $this->int('pipeline.attachments.max_files', 10));
+    }
+
+    public function maxAttachmentMb(): int
+    {
+        return max(1, $this->int('pipeline.attachments.max_mb', 25));
+    }
+
+    public function maxAttachmentBytes(): int
+    {
+        return $this->maxAttachmentMb() * 1024 * 1024;
+    }
+
+    public function maxAttachmentsTotalMb(): int
+    {
+        return max(1, $this->int('pipeline.attachments.max_total_mb', 90));
+    }
+
+    public function maxAttachmentsTotalBytes(): int
+    {
+        return $this->maxAttachmentsTotalMb() * 1024 * 1024;
+    }
+
+    public function maxAttachmentMegapixels(): int
+    {
+        return max(1, $this->int('pipeline.attachments.max_megapixels', 50));
+    }
+
+    /**
+     * The types the configuration allows, among the ones the sanitizer
+     * handles: the list can only narrow them.
+     *
+     * @return list<ImageFormat>
+     */
+    public function attachmentFormats(): array
+    {
+        $formats = [];
+        $mimes = $this->config->get('pipeline.attachments.mimes', []);
+        foreach (is_array($mimes) ? $mimes : [] as $mime) {
+            $format = is_string($mime) ? ImageFormat::tryFrom($mime) : null;
+            if ($format !== null && ! in_array($format, $formats, true)) {
+                $formats[] = $format;
+            }
+        }
+
+        return $formats;
+    }
+
+    /**
+     * Days after a request ends (deployed, rejected, failed) before its
+     * attachments' files are deleted.
+     */
+    public function attachmentKeepDays(): int
+    {
+        return max(1, $this->int('pipeline.attachments.keep_days', 90));
     }
 
     public function portalLinkMinutes(): int

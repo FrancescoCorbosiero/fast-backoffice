@@ -20,6 +20,7 @@ final readonly class ChangeRequestData
     /**
      * @param  list<string>  $touchedPaths  files the run changed, relative to the repository
      * @param  array<string, string>  $generatedFiles  path → content, for onboarding
+     * @param  list<ChangeRequestAttachmentData>  $attachments  the images, in the client's order; removed ones included
      */
     public function __construct(
         public int $id,
@@ -45,6 +46,7 @@ final readonly class ChangeRequestData
         public ?int $costCents,
         public CarbonImmutable $createdAt,
         public CarbonImmutable $updatedAt,
+        public array $attachments = [],
     ) {}
 
     public function reference(): Reference
@@ -60,6 +62,17 @@ final readonly class ChangeRequestData
     public function awaitsDecision(): bool
     {
         return $this->status->awaitsDecision();
+    }
+
+    /**
+     * The images whose files are still there, in order: what a run copies
+     * into the checkout and what the prompt lists.
+     *
+     * @return list<ChangeRequestAttachmentData>
+     */
+    public function availableAttachments(): array
+    {
+        return array_values(array_filter($this->attachments, fn (ChangeRequestAttachmentData $attachment): bool => ! $attachment->isRemoved()));
     }
 
     public function title(): string

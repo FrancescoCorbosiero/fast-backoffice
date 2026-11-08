@@ -38,6 +38,15 @@ it('always refuses hidden files, escapes, the pipeline files and the files that 
     ['requirements-dev.txt', 'file di build o configurazione'],
     ['Makefile', 'file di build o configurazione'],
     ['', 'percorso vuoto'],
+    // git -z hands names over exactly: " content/x.js" is a folder called " content", not content/.
+    [' content/x.js', 'nome di file non valido'],
+    ['content/x.md ', 'nome di file non valido'],
+    // The run's photos wait there to be moved, never to be committed there.
+    ['pipeline-uploads', 'cartella degli allegati'],
+    ['pipeline-uploads/1-foto.jpg', 'cartella degli allegati'],
+    ['./pipeline-uploads/1-foto.jpg', 'cartella degli allegati'],
+    ["content/a\tb.md", 'nome di file non valido'],
+    ["content/a\nb.md", 'nome di file non valido'],
 ]);
 
 it('lets onboarding write exactly the two pipeline files', function (): void {
@@ -48,4 +57,12 @@ it('lets onboarding write exactly the two pipeline files', function (): void {
         ->and($policy->refuses('content/x.md'))->toBe('fuori dai percorsi modificabili')
         ->and($policy->refuses('.claude/CLAUDE.md'))->toBe('file o cartella nascosti')
         ->and($policy->refused(['pipeline.yml', 'README.md']))->toBe(['README.md (fuori dai percorsi modificabili)']);
+});
+
+it('refuses the photos\' folder at the root only, whatever the editable paths say', function (): void {
+    $policy = new PathPolicy(['content', 'pipeline-uploads']);
+
+    expect($policy->refuses('pipeline-uploads/1-foto.jpg'))->toBe('cartella degli allegati')
+        ->and($policy->refuses('content/pipeline-uploads/foto.jpg'))->toBeNull()
+        ->and($policy->refuses('content/opere/pipeline-uploads.md'))->toBeNull();
 });

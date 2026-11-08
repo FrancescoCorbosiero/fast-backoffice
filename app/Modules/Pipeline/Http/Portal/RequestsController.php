@@ -8,23 +8,27 @@ use App\Modules\Pipeline\Actions\ApproveChangeRequest;
 use App\Modules\Pipeline\Actions\RejectChangeRequest;
 use App\Modules\Pipeline\Actions\SubmitChangeRequest;
 use App\Modules\Pipeline\Auth\ClientUser;
+use App\Modules\Pipeline\Data\AttachmentUpload;
 use App\Modules\Pipeline\Data\ChangeRequestInput;
 use App\Modules\Pipeline\Enums\DecidedBy;
+use App\Modules\Pipeline\Enums\ImageFormat;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Queries\ChangeRequests;
 use App\Modules\Pipeline\Queries\WebsitePipelines;
+use App\Modules\Pipeline\Support\PipelineConfig;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * The three screens of the portal: my requests, a new request, one
- * request with its preview and the decision. A client only ever sees
- * their own (ChangeRequestPolicy).
+ * The three screens of the portal: my requests, a new request (with its
+ * photos), one request with its preview and the decision. A client only
+ * ever sees their own (ChangeRequestPolicy).
  */
 final class RequestsController
 {
@@ -45,7 +49,7 @@ final class RequestsController
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(Request $request, PipelineConfig $config): View
     {
         $client = $this->client($request);
 
@@ -54,6 +58,13 @@ final class RequestsController
             'websites' => $this->pipelines->readyForContact($client->contactId),
             'old' => ['website_id' => $request->old('website_id'), 'request_text' => $request->old('request_text')],
             'errors_' => $request->session()->get('errors'),
+            'limits' => [
+                'files' => $config->maxAttachments(),
+                'mb' => $config->maxAttachmentMb(),
+                'total_mb' => $config->maxAttachmentsTotalMb(),
+                'keep_days' => $config->attachmentKeepDays(),
+                'accept' => implode(',', array_map(fn (ImageFormat $format): string => $format->value, $config->attachmentFormats())),
+            ],
         ]);
     }
 
@@ -63,8 +74,16 @@ final class RequestsController
         $websiteId = $request->input('website_id');
         $text = $request->input('request_text');
 
+        // attachments[]: the form's list of files; an empty input sends a null.
+        $uploads = [];
+        foreach ($request->files->all('attachments') as $file) {
+            if ($file instanceof UploadedFile) {
+                $uploads[] = AttachmentUpload::fromUploadedFile($file);
+            }
+        }
+
         try {
-            $created = $submit->submit(new ChangeRequestInput($client->contactId, is_numeric($websiteId) ? (int) $websiteId : 0, is_string($text) ? $text : ''));
+            $created = $submit->submit(new ChangeRequestInput($client->contactId, is_numeric($websiteId) ? (int) $websiteId : 0, is_string($text) ? $text : '', $uploads));
         } catch (ValidationException $exception) {
             return redirect()->route('portal.requests.create')->withInput()->withErrors($exception->validator);
         }
@@ -72,7 +91,7 @@ final class RequestsController
         return redirect()->route('portal.requests.show', ['id' => $created->id])->with('portal.status', 'Richiesta inviata: ci lavoriamo e ti avvisiamo quando l\'anteprima è pronta.');
     }
 
-    public function show(Request $request, int $id): View
+    public function show(Request $request, int $id, PipelineConfig $config): View
     {
         $client = $this->client($request);
         $model = $this->own($client, $id);
@@ -81,6 +100,7 @@ final class RequestsController
             'client' => $client,
             'request' => $model->toData(),
             'status' => $request->session()->get('portal.status'),
+            'keepDays' => $config->attachmentKeepDays(),
         ]);
     }
 

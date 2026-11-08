@@ -81,6 +81,25 @@ it('fails without pushing when the branch is not fast-forward or touches files o
         ->and($this->fake->calls('git merge'))->toHaveCount(1);
 });
 
+it('gates the branch on git\'s unquoted listing, so a path with an accent deploys', function (): void {
+    $this->fake->touched = ['content/caffè.md'];
+
+    $request = deploy($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::Deployed)
+        ->and($this->fake->calls('git diff --name-only')[0]['argv'])->toContain('-z');
+});
+
+it('gates the branch again on deploy: a photo committed under pipeline-uploads/ is refused', function (): void {
+    $this->fake->touched = ['content/chi-sono.md', 'pipeline-uploads/1-ritratto.jpg'];
+
+    $request = deploy($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::Failed)
+        ->and($request->error)->toContain('pipeline-uploads/1-ritratto.jpg (cartella degli allegati)')
+        ->and($this->fake->ran('git push -- origin main:main'))->toBeFalse();
+});
+
 it('marks the request failed when the deploy command fails, after the merge was pushed', function (): void {
     $this->fake->files['pipeline.yml'] = FakeCommandRunner::manifest(deploy: './deploy.sh');
     $this->fake->on('sh -c ./deploy.sh', FakeCommandRunner::fail('ssh: connection refused', 255));

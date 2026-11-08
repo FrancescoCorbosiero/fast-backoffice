@@ -54,6 +54,10 @@ arch('no debugging leftovers')
     ->expect(['dd', 'dump', 'ray', 'var_dump', 'print_r'])
     ->not->toBeUsed();
 
+arch('images are handled with what production has: no exif extension, no Imagick (CI has both)')
+    ->expect(fn () => Modules::lineMatches('/\b(?:exif_[a-z_]+|read_exif_data)\s*\(|\bImagick/'))
+    ->toBe([]);
+
 arch('dates are formatted with isoFormat(), never translatedFormat(), which reads PHP tokens')
     ->expect(fn () => Modules::methodCalls('translatedFormat'))
     ->toBe([]);

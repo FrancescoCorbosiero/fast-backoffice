@@ -2,7 +2,9 @@
 # Horizon for the queue, the scheduler, the pipeline worker (the only consumer
 # of the pipeline queue: git, Node and the Claude Code CLI), PostgreSQL 18,
 # Redis, and a nightly backup to S3-compatible storage. Configuration comes
-# from .env.production.
+# from .env.production. The change-request photos live on the
+# pipeline_uploads volume, shared by app, scheduler, the worker (read-only)
+# and the backup.
 #
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 
@@ -51,6 +53,10 @@ services:
 
   app:
     <<: *app
+    # The change-request photos (docs/pipeline.md §10): app writes them on
+    # upload and serves them through the authorised routes.
+    volumes:
+      - pipeline_uploads:/var/www/html/storage/app/pipeline-uploads
     # A name no other stack on a shared network can claim: web talks to
     # PHP-FPM through it (docker/prod/Caddyfile*), never through "app".
     networks:
@@ -75,6 +81,9 @@ services:
   scheduler:
     <<: *app
     command: php artisan schedule:work
+    # pipeline.prune-attachments deletes the photos of requests long over.
+    volumes:
+      - pipeline_uploads:/var/www/html/storage/app/pipeline-uploads
 
   # The pipeline worker (docs/pipeline.md §3). Not the x-app anchor on purpose:
   # it gets only what it needs, never the PEC, SES or S3 secrets. The deploy
@@ -116,6 +125,9 @@ services:
     volumes:
       - pipeline_workspace:/var/www/html/storage/app/pipeline
       - previews:/var/www/html/storage/app/previews
+      # Read-only: the worker copies a request's photos into the checkout,
+      # and runs client code that must not alter or delete anyone's photos.
+      - pipeline_uploads:/var/www/html/storage/app/pipeline-uploads:ro
       - ./docker/secrets/pipeline_deploy_key:/run/secrets/pipeline_deploy_key:ro
     depends_on:
       pgsql:
@@ -164,6 +176,9 @@ services:
     environment:
       DB_HOST: pgsql
       BACKUP_HOUR: ${BACKUP_HOUR:-03}
+    # Mirrored nightly; written only by `restore-uploads /srv/pipeline-uploads` (runbook §4).
+    volumes:
+      - pipeline_uploads:/srv/pipeline-uploads
     depends_on:
       pgsql:
         condition: service_healthy
@@ -176,3 +191,4 @@ volumes:
   caddy_config:
   pipeline_workspace:
   previews:
+  pipeline_uploads:

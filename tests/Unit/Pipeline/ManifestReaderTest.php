@@ -30,5 +30,6 @@ it('refuses what does not follow the contract', function (string $yaml, string $
     'editable hidden path' => ["build: hugo\noutput_dir: public\neditable_paths: ['.github']\n", 'nascosti'],
     'editable manifest' => ["build: hugo\noutput_dir: public\neditable_paths: ['pipeline.yml']\n", 'file della pipeline'],
     'editable build file' => ["build: hugo\noutput_dir: public\neditable_paths: ['package.json']\n", 'file di build'],
+    'the photos\' folder' => ["build: hugo\noutput_dir: public\neditable_paths: ['pipeline-uploads']\n", 'cartella degli allegati'],
     'non-string path' => ["build: hugo\noutput_dir: public\neditable_paths: [1]\n", 'deve essere un percorso'],
 ]);
