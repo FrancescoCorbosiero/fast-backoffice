@@ -30,9 +30,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 4. Migrate and create the owner:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
-docker compose -f docker-compose.prod.yml exec app php artisan db:seed --force
-docker compose -f docker-compose.prod.yml exec app php artisan owner:create you@example.it
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app php artisan migrate --force
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app php artisan db:seed --force
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app php artisan owner:create you@example.it
 ```
 
 5. Sign in at `https://$DOMAIN/admin` (two-factor authentication is optional: profile page, when you want it), then fill Impostazioni: profilo aziendale, fatture, numerazione, SdI e PEC (sdi.md §9), campagne email.
@@ -56,9 +56,9 @@ The overlay (`docker-compose.proxy.yml`) removes `web`'s ports, puts it on the `
 git pull
 docker compose -f docker-compose.prod.yml --env-file .env.production build
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --no-deps app web
-docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app php artisan migrate --force
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --no-deps horizon scheduler
-docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:terminate
+docker compose -f docker-compose.prod.yml --env-file .env.production exec horizon php artisan horizon:terminate
 ```
 
 Migrations run by hand, after the new `app` is up and before the workers restart: the entrypoint only caches configuration, so a container restart never changes the schema by surprise. `horizon:terminate` makes Horizon finish its current jobs and restart on the new code.
@@ -78,7 +78,7 @@ Rollback: `git checkout <previous tag>` and the same steps. Migrations in this p
 The `backup` service dumps the database every night (`pg_dump`, custom format, compressed) to `s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PREFIX/`, checks the dump is readable, and prunes copies older than `BACKUP_KEEP_DAYS`. Run one now:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec backup backup
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backup backup
 ```
 
 The same run mirrors the change requests' photos (the `pipeline_uploads` volume) to `s3://$BACKUP_S3_BUCKET/$BACKUP_S3_UPLOADS_PREFIX/` with `aws s3 sync --delete`: a photo the retention job deleted (docs/pipeline.md §10) goes from the mirror too. Turn **versioning** on for the backup bucket, with a lifecycle rule that expires noncurrent versions after `BACKUP_KEEP_DAYS`: a dump restored from a few days back still finds its photos among the earlier versions, and nothing outlives the retention by more than that.
@@ -86,19 +86,19 @@ The same run mirrors the change requests' photos (the `pipeline_uploads` volume)
 **Restore drill, once a month.** It restores the latest dump into a scratch database next to the live one and counts contacts and invoices; nothing touches production:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec backup restore latest
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backup restore latest
 ```
 
 Expect `restored <name> into fast_backoffice_restore_test: N contacts, M invoices`, with numbers that match the panel. Then drop the scratch database:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec pgsql psql -U "$DB_USERNAME" -d postgres -c 'DROP DATABASE fast_backoffice_restore_test;'
+docker compose -f docker-compose.prod.yml --env-file .env.production exec pgsql psql -U "$DB_USERNAME" -d postgres -c 'DROP DATABASE fast_backoffice_restore_test;'
 ```
 
 The photos' half of the drill restores the mirror into a scratch folder in the `backup` container, checks five photos stored before last night against their checksums in the database, and removes the folder:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec backup restore-uploads
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backup restore-uploads
 ```
 
 Expect `restored N files into /tmp/pipeline-uploads-restore-test: 5 of 5 sampled checksums match` (fewer than five when fewer photos are kept).
@@ -107,8 +107,8 @@ Expect `restored N files into /tmp/pipeline-uploads-restore-test: 5 of 5 sampled
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d pgsql redis backup
-docker compose -f docker-compose.prod.yml exec backup restore latest fast_backoffice
-docker compose -f docker-compose.prod.yml exec backup restore-uploads /srv/pipeline-uploads
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backup restore latest fast_backoffice
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backup restore-uploads /srv/pipeline-uploads
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ```
 
@@ -116,8 +116,8 @@ Files come back from the bucket as they are (versioning covers deletions). The p
 
 ## 5. Day to day
 
-- **Logs**: `docker compose -f docker-compose.prod.yml logs -f app horizon scheduler web`. The app logs to stderr (`LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`).
-- **Jobs**: Sistema › Attività programmate shows every scheduled job, its last runs and lets you run one now. Horizon at `/horizon` shows the queue, except the pipeline queue, which the `pipeline-worker` consumes outside Horizon: `docker compose -f docker-compose.prod.yml logs -f pipeline-worker`, the request's own log and error in Asset › Richieste di modifica, and `exec app php artisan queue:failed`. An approved request that never deployed: `exec app php artisan scheduling:run pipeline.deploy-approved`.
+- **Logs**: `docker compose -f docker-compose.prod.yml --env-file .env.production logs -f app horizon scheduler web`. The app logs to stderr (`LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`).
+- **Jobs**: Sistema › Attività programmate shows every scheduled job, its last runs and lets you run one now. Horizon at `/horizon` shows the queue, except the pipeline queue, which the `pipeline-worker` consumes outside Horizon: `docker compose -f docker-compose.prod.yml --env-file .env.production logs -f pipeline-worker`, the request's own log and error in Asset › Richieste di modifica, and `exec app php artisan queue:failed`. An approved request that never deployed: `exec app php artisan scheduling:run pipeline.deploy-approved`.
 - **PEC**: Sistema › Casella PEC lists every message read; what needs a human is flagged and counted on the dashboard.
 - **Photos**: `pipeline.prune-attachments` deletes, every night at 03:40, the photos of requests over for more than 90 days (the rows stay, marked removed). Run it now: `exec app php artisan scheduling:run pipeline.prune-attachments`.
 - **Audit**: Sistema › Audit, every fiscal and settings change.
