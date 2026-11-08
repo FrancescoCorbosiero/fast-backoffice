@@ -142,11 +142,12 @@ describe('PNG', function (): void {
         $base = ImageFixtures::gdPng();
         $image = sanitizeImage(ImageFixtures::png(orientation: 6));
         $types = array_map(fn (string $chunk): string => substr($chunk, 4, 4), ImageFixtures::pngChunks($image->bytes));
+        // GD's own ancillary chunks (pHYs, the pixel density, for libgd 2.3) are on the allowlist.
+        $gd = array_values(array_diff(array_map(fn (string $chunk): string => substr($chunk, 4, 4), ImageFixtures::pngChunks($base)), ['IHDR', 'IDAT', 'IEND']));
 
         expect($image->format)->toBe(ImageFormat::Png)
             ->and($image->bytes)->not->toContain(ImageFixtures::CANARY)
-            // GD's own pHYs (pixel density) is one of the chunks kept.
-            ->and(array_values(array_unique($types)))->toBe(['IHDR', 'iCCP', 'pHYs', 'eXIf', 'IDAT', 'IEND'])
+            ->and(array_values(array_unique($types)))->toBe(['IHDR', 'iCCP', ...$gd, 'eXIf', 'IDAT', 'IEND'])
             ->and(ImageFixtures::pngIdat($image->bytes))->toBe(ImageFixtures::pngIdat($base))
             ->and($image->bytes)->toEndWith(ImageFixtures::pngChunk('IEND', ''))
             ->and($image->bytes)->toContain(ImageFixtures::pngChunk('iCCP', "icc\0\0".gzcompress(ImageFixtures::icc())))
