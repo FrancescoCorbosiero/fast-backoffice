@@ -24,10 +24,13 @@ use App\Modules\Pipeline\Models\WebsitePipeline;
 use App\Modules\Repositories\Models\Repository;
 use App\Modules\Websites\Contracts\WebsitePanel;
 use App\Modules\Websites\Models\Website;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Feature\Pipeline\Site;
+use Tests\Support\ImageFixtures;
 
 beforeEach(function (): void {
     signInAsOwner();
@@ -243,4 +246,71 @@ it('explains an empty request list by the state of the pipelines, and gives the 
     Livewire::test(ContactChangeRequestsTable::class, ['contactId' => $site['contact']->id])
         ->assertSee('Anteprima pronta')->assertSee("/admin/change-requests/{$request->id}", escape: false)->assertSee('Nuova richiesta')->assertSee("contact_id={$site['contact']->id}", escape: false);
     $this->get('/admin/change-requests')->assertOk()->assertDontSee('Prima collega un repository');
+});
+
+it('attaches photos to a request made in the panel, deletes the uploaded originals, and shows them on its page', function (): void {
+    Storage::fake('pipeline-uploads');
+    $site = Site::make();
+
+    Livewire::test(CreateChangeRequest::class)
+        ->fillForm([
+            'contact_id' => $site['contact']->id,
+            'website_id' => $site['website']->id,
+            'request_text' => 'Nuova opera: ecco la foto.',
+            'attachments' => [UploadedFile::fake()->createWithContent('opera.jpg', ImageFixtures::jpeg(6)), UploadedFile::fake()->createWithContent('dettaglio.png', ImageFixtures::png())],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $request = ChangeRequest::query()->sole();
+    $attachments = $request->attachments;
+    expect($attachments->pluck('original_name')->all())->toBe(['opera.jpg', 'dettaglio.png'])
+        ->and($attachments->pluck('position')->all())->toBe([1, 2]);
+    foreach ($attachments as $attachment) {
+        expect(Storage::disk('pipeline-uploads')->get($attachment->stored_path))->not->toContain(ImageFixtures::CANARY);
+    }
+    // Livewire's temporary copies still had the GPS: they are gone (its .json notes of name and size stay until its own cleanup).
+    expect(collect(Storage::disk('tmp-for-tests')->allFiles())->filter(fn (string $path): bool => str_contains($path, 'livewire-tmp') && ! str_ends_with($path, '.json'))->all())->toBe([]);
+
+    $this->get("/admin/change-requests/{$request->id}")->assertOk()
+        ->assertSee('Foto allegate')
+        ->assertSee("/admin/change-requests/{$request->id}/attachments/{$attachments[0]->id}", false)
+        ->assertSee('pipeline-uploads/1-opera.jpg');
+});
+
+it('shows the photos\' problems on the upload field, and refuses anything but an upload in it', function (): void {
+    Storage::fake('pipeline-uploads');
+    $site = Site::make();
+    $form = ['contact_id' => $site['contact']->id, 'website_id' => $site['website']->id, 'request_text' => 'Metti la foto.'];
+
+    // A JPEG cut short passes the field's own type check; the action refuses it.
+    Livewire::test(CreateChangeRequest::class)
+        ->fillForm([...$form, 'attachments' => [UploadedFile::fake()->createWithContent('rotta.jpg', substr(ImageFixtures::gdJpeg(), 0, -40))]])
+        ->call('create')
+        ->assertHasFormErrors(['attachments']);
+
+    Livewire::test(CreateChangeRequest::class)
+        ->fillForm($form)
+        ->set('data.attachments', ['../../.env'])
+        ->call('create')
+        ->assertHasFormErrors(['attachments']);
+
+    expect(ChangeRequest::query()->count())->toBe(0)->and(Storage::disk('pipeline-uploads')->allFiles())->toBe([]);
+});
+
+it('repeats a failed request with the photos it still has', function (): void {
+    Storage::fake('pipeline-uploads');
+    $site = Site::make();
+    $failed = ChangeRequest::factory()->status(ChangeRequestStatus::Failed)->create(['contact_id' => $site['contact']->id, 'website_id' => $site['website']->id]);
+    Site::attach($failed, ImageFixtures::jpeg(), 'ritratto.jpg');
+
+    Livewire::test(ViewChangeRequest::class, ['record' => $failed->id])
+        ->mountAction('retry')
+        ->assertMountedActionModalSee('La foto allegata viene copiata nella nuova richiesta.')
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    $again = ChangeRequest::query()->orderByDesc('id')->firstOrFail();
+    expect($again->id)->not->toBe($failed->id)
+        ->and($again->attachments->pluck('original_name')->all())->toBe(['ritratto.jpg']);
 });

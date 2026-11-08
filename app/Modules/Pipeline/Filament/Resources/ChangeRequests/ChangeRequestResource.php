@@ -12,17 +12,20 @@ use App\Modules\Contacts\Queries\FindContact;
 use App\Modules\Contacts\Queries\SearchContacts;
 use App\Modules\Pipeline\Enums\ChangeRequestKind;
 use App\Modules\Pipeline\Enums\ChangeRequestStatus;
+use App\Modules\Pipeline\Enums\ImageFormat;
 use App\Modules\Pipeline\Filament\Resources\ChangeRequests\Pages\CreateChangeRequest;
 use App\Modules\Pipeline\Filament\Resources\ChangeRequests\Pages\ListChangeRequests;
 use App\Modules\Pipeline\Filament\Resources\ChangeRequests\Pages\ViewChangeRequest;
 use App\Modules\Pipeline\Filament\Resources\WebsitePipelines\WebsitePipelineResource;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Queries\WebsitePipelines;
+use App\Modules\Pipeline\Support\PipelineConfig;
 use App\Modules\Websites\Filament\Components\WebsiteLink;
 use App\Modules\Websites\Queries\Websites;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Resource;
@@ -74,8 +77,36 @@ class ChangeRequestResource extends Resource
                         return 'I siti del cliente con la pipeline pronta.';
                     }),
                 Textarea::make('request_text')->label('Richiesta')->rows(6)->required()->maxLength(4000)->placeholder('Cosa va cambiato sul sito, con parole semplici.')->columnSpanFull(),
+                self::attachmentsField(),
             ])->columns(2),
         ]);
+    }
+
+    /**
+     * The photos, if the client sent some (docs/pipeline.md §10). Livewire
+     * only holds them on its private temporary disk: SubmitChangeRequest
+     * reads, checks, cleans and stores them. AVIF and HEIC pass the field
+     * so the action can say what to do with them.
+     */
+    private static function attachmentsField(): FileUpload
+    {
+        $config = app(PipelineConfig::class);
+        $types = [...array_map(fn (ImageFormat $format): string => $format->value, $config->attachmentFormats()), 'image/avif', 'image/heic', 'image/heif'];
+
+        return FileUpload::make('attachments')->label('Foto')
+            ->helperText('Facoltative: fino a '.$config->maxAttachments().' foto JPEG, PNG o WebP, '.$config->maxAttachmentMb().' MB l\'una e '.$config->maxAttachmentsTotalMb().' MB in tutto, nell\'ordine che vedi. Posizione e dati della fotocamera vengono tolti prima di salvarle.')
+            ->multiple()
+            ->reorderable()
+            ->appendFiles()
+            ->acceptedFileTypes($types)
+            ->maxSize($config->maxAttachmentMb() * 1024)
+            ->maxFiles($config->maxAttachments())
+            ->disk($config->attachmentsDisk())
+            ->visibility('private')
+            ->storeFiles(false)
+            ->preventFilePathTampering()
+            ->showAllValidationMessages()
+            ->columnSpanFull();
     }
 
     public static function table(Table $table): Table

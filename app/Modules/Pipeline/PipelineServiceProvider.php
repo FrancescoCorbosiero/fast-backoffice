@@ -10,6 +10,7 @@ use App\Modules\Pipeline\Auth\ClientUserProvider;
 use App\Modules\Pipeline\Contributions\ChangeRequestsContactPanel;
 use App\Modules\Pipeline\Contributions\PipelineWebsitePanel;
 use App\Modules\Pipeline\Filament\PipelinePlugin;
+use App\Modules\Pipeline\Http\AttachmentsController;
 use App\Modules\Pipeline\Http\Portal\RequestsController;
 use App\Modules\Pipeline\Http\Portal\SignInController;
 use App\Modules\Pipeline\Integrations\CommandRunner;
@@ -82,8 +83,9 @@ class PipelineServiceProvider extends ModuleServiceProvider
                 Route::post('/esci', [SignInController::class, 'signOut'])->name('sign-out');
                 Route::get('/', [RequestsController::class, 'index'])->name('requests');
                 Route::get('/richieste/nuova', [RequestsController::class, 'create'])->name('requests.create');
-                Route::post('/richieste', [RequestsController::class, 'store'])->name('requests.store');
+                Route::post('/richieste', [RequestsController::class, 'store'])->middleware('throttle:10,1')->name('requests.store');
                 Route::get('/richieste/{id}', [RequestsController::class, 'show'])->whereNumber('id')->name('requests.show');
+                Route::get('/richieste/{id}/foto/{attachment}', [AttachmentsController::class, 'portal'])->whereNumber(['id', 'attachment'])->name('requests.attachment');
                 Route::post('/richieste/{id}/approva', [RequestsController::class, 'approve'])->whereNumber('id')->name('requests.approve');
                 Route::post('/richieste/{id}/rifiuta', [RequestsController::class, 'reject'])->whereNumber('id')->name('requests.reject');
             });

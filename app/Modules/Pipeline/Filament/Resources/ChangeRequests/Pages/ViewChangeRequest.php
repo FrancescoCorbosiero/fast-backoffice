@@ -10,6 +10,7 @@ use App\Modules\Pipeline\Actions\DeployChangeRequest;
 use App\Modules\Pipeline\Actions\LinkRepository;
 use App\Modules\Pipeline\Actions\RejectChangeRequest;
 use App\Modules\Pipeline\Actions\SubmitChangeRequest;
+use App\Modules\Pipeline\Data\ChangeRequestAttachmentData;
 use App\Modules\Pipeline\Data\ChangeRequestData;
 use App\Modules\Pipeline\Data\ChangeRequestInput;
 use App\Modules\Pipeline\Enums\ChangeRequestKind;
@@ -30,6 +31,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontFamily;
 use Filament\Support\Icons\Heroicon;
@@ -78,6 +80,17 @@ class ViewChangeRequest extends ViewRecord
                 TextEntry::make('r_text')->label('')->state($data->requestText)->html()->formatStateUsing(fn (string $state): string => nl2br(e($state))),
             ]),
         ];
+        if ($data->attachments !== []) {
+            $components[] = Section::make('Foto allegate')->compact()->components([
+                View::make('pipeline.attachments')->viewData(['attachments' => array_map(fn (ChangeRequestAttachmentData $attachment): array => [
+                    'position' => $attachment->position,
+                    'name' => $attachment->originalName,
+                    'details' => $attachment->width.'×'.$attachment->height.' · '.$attachment->sizeLabel().' · '.$attachment->format->label().' · '.$attachment->workspacePath(),
+                    'url' => $attachment->isRemoved() ? null : route('filament.admin.pipeline.attachment', ['record' => $data->id, 'attachment' => $attachment->id]),
+                    'removed' => 'Rimossa il '.$attachment->removedAt?->isoFormat('D MMM YYYY'),
+                ], $data->attachments)]),
+            ]);
+        }
 
         // The preview stays online until the deploy removes it: still worth a look once approved.
         if ($data->previewUrl !== null && in_array($data->status, [ChangeRequestStatus::PreviewReady, ChangeRequestStatus::Approved], true)) {
@@ -136,14 +149,14 @@ class ViewChangeRequest extends ViewRecord
             Action::make('retry')->label('Ripeti richiesta')->icon(Heroicon::OutlinedArrowPath)->color('primary')
                 ->visible(fn (): bool => $this->isOver() && $this->request()->kind === ChangeRequestKind::Change)
                 ->modalHeading('Ripeti la richiesta')
-                ->modalDescription(fn (): string => 'Per '.$this->request()->client_name.' su '.$this->request()->website_name.': una nuova richiesta, lavorata da capo.')
+                ->modalDescription(fn (): string => 'Per '.$this->request()->client_name.' su '.$this->request()->website_name.': una nuova richiesta, lavorata da capo.'.self::photosNote($this->request()->toData()))
                 ->modalSubmitActionLabel('Invia')
                 ->fillForm(fn (): array => ['request_text' => $this->request()->request_text])
                 ->schema([Textarea::make('request_text')->label('Richiesta')->rows(6)->required()->maxLength(SubmitChangeRequest::MAX_LENGTH)])
                 ->action(function (array $data): void {
                     $this->run(function () use ($data): string {
                         $current = $this->request();
-                        $new = app(SubmitChangeRequest::class)->submit(new ChangeRequestInput($current->contact_id, $current->website_id, Shape::string($data, 'request_text')));
+                        $new = app(SubmitChangeRequest::class)->submit(new ChangeRequestInput($current->contact_id, $current->website_id, Shape::string($data, 'request_text'), attachmentsFrom: $current->id));
                         $this->redirect(ChangeRequestResource::getUrl('view', ['record' => $new->id]));
 
                         return 'Richiesta #'.$new->id.' inviata';
@@ -190,6 +203,27 @@ class ViewChangeRequest extends ViewRecord
         }
 
         return $data->deployStartedAt === null || $data->deployStartedAt->lessThan(DeployChangeRequest::claimStaleBefore(app(PipelineConfig::class)));
+    }
+
+    /**
+     * What happens to the photos when the request is repeated: the ones
+     * still kept come along, the removed ones can't.
+     */
+    private static function photosNote(ChangeRequestData $data): string
+    {
+        $kept = count($data->availableAttachments());
+        $removed = count($data->attachments) - $kept;
+        $note = match (true) {
+            $kept === 1 => ' La foto allegata viene copiata nella nuova richiesta.',
+            $kept > 1 => ' Le '.$kept.' foto allegate vengono copiate nella nuova richiesta.',
+            default => '',
+        };
+
+        return $note.match (true) {
+            $removed === 1 => ' Una foto è già stata rimossa e non c\'è più.',
+            $removed > 1 => ' '.$removed.' foto sono già state rimosse e non ci sono più.',
+            default => '',
+        };
     }
 
     private function isOver(): bool

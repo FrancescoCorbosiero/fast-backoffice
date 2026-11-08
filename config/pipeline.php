@@ -53,6 +53,24 @@ return [
         'name' => env('PIPELINE_QUEUE', 'pipeline'),
     ],
 
+    // Images on change requests (docs/pipeline.md §10): JPEG, PNG and WebP,
+    // stripped of their metadata before they are stored on a private disk
+    // (config/filesystems.php, "pipeline-uploads") that the app, the
+    // scheduler and the worker share: the pipeline_uploads volume in
+    // production. The portal sends every photo in one request and
+    // Cloudflare refuses bodies over 100 MB: hence the total. The site's
+    // build decodes every image: hence the megapixels. Files go keep_days
+    // after the request ends; the rows stay.
+    'attachments' => [
+        'disk' => 'pipeline-uploads',
+        'max_files' => 10,
+        'max_mb' => 25,
+        'max_total_mb' => 90,
+        'max_megapixels' => 50,
+        'mimes' => ['image/jpeg', 'image/png', 'image/webp'],
+        'keep_days' => 90,
+    ],
+
     'portal' => [
         // How long a sign-in link stays valid.
         'link_minutes' => (int) env('PIPELINE_PORTAL_LINK_MINUTES', 15),

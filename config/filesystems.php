@@ -57,6 +57,19 @@ return [
             'report' => false,
         ],
 
+        // Change-request attachments (docs/pipeline.md §10): private, never
+        // served by URL, on the pipeline_uploads volume that app, scheduler
+        // and pipeline-worker share in production. Not S3: the worker never
+        // holds S3 credentials.
+        'pipeline-uploads' => [
+            'driver' => 'local',
+            'root' => env('PIPELINE_UPLOADS_ROOT', storage_path('app/pipeline-uploads')),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'files' => [
             'driver' => 's3',
             'key' => env('FILES_S3_KEY'),

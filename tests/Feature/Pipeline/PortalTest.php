@@ -13,9 +13,12 @@ use App\Modules\Pipeline\Jobs\DeployStaticSiteRequest;
 use App\Modules\Pipeline\Jobs\RunStaticSiteRequest;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Models\PortalSignIn;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\Feature\Pipeline\Site;
+use Tests\Support\ImageFixtures;
 
 beforeEach(function (): void {
     Queue::fake();
@@ -185,4 +188,61 @@ it('keeps a portal session away from the admin panel, and a sign-in of a contact
 
     $site['contact']->update(['roles' => ['supplier']]);
     expect(app(App\Modules\Pipeline\Auth\ClientUserProvider::class)->retrieveById('contact:'.$site['contact']->id))->toBeNull();
+});
+
+it('lets a client attach photos with a plain form, no JavaScript, and find them on the request', function (): void {
+    Storage::fake('pipeline-uploads');
+    $site = Site::make();
+    $this->actingAs(clientUser($site['contact']), 'portal');
+
+    $this->get('/area-clienti/richieste/nuova')->assertOk()
+        ->assertSee('enctype="multipart/form-data"', false)
+        ->assertSee('<input id="attachments" type="file" name="attachments[]" multiple accept="image/jpeg,image/png,image/webp">', false)
+        ->assertSee('togliamo la posizione e i dati della fotocamera')
+        ->assertSee('le cancelliamo 90 giorni dopo la chiusura della richiesta');
+
+    $this->post('/area-clienti/richieste', [
+        'website_id' => $site['website']->id,
+        'request_text' => 'Metti questa foto nella pagina Chi sono.',
+        'attachments' => [UploadedFile::fake()->createWithContent('Ritratto.jpg', ImageFixtures::jpeg(6))],
+    ])->assertRedirect();
+
+    $request = ChangeRequest::query()->sole();
+    $attachment = $request->attachments->sole();
+    expect(Storage::disk('pipeline-uploads')->get($attachment->stored_path))->not->toContain(ImageFixtures::CANARY);
+    Queue::assertPushed(RunStaticSiteRequest::class);
+
+    $this->get('/area-clienti/richieste/'.$request->id)->assertOk()
+        ->assertSee('La foto che hai allegato')
+        ->assertSee('/area-clienti/richieste/'.$request->id.'/foto/'.$attachment->id, false)
+        ->assertSee('loading="lazy"', false)
+        ->assertSee('Ritratto.jpg · 32×48');
+});
+
+it('tells the client what is wrong with the photos, in Italian, and that they have to choose them again', function (): void {
+    Storage::fake('pipeline-uploads');
+    $site = Site::make();
+    $this->actingAs(clientUser($site['contact']), 'portal');
+    $form = [
+        'website_id' => $site['website']->id,
+        'request_text' => '',
+        'attachments' => [UploadedFile::fake()->createWithContent('preventivo.jpg', "%PDF-1.7\n")],
+    ];
+
+    $this->post('/area-clienti/richieste', $form)->assertRedirect('/area-clienti/richieste/nuova')->assertSessionHasErrors(['request_text', 'attachments']);
+    $this->followingRedirects()->post('/area-clienti/richieste', $form)->assertOk()
+        ->assertSee('Scrivi cosa vuoi cambiare.')
+        ->assertSee('«preventivo.jpg» non è una foto JPEG, PNG o WebP.')
+        ->assertSee('scegli di nuovo le foto');
+    expect(ChangeRequest::query()->count())->toBe(0);
+});
+
+it('throttles new requests', function (): void {
+    $site = Site::make();
+    $this->actingAs(clientUser($site['contact']), 'portal');
+
+    foreach (range(1, 10) as $attempt) {
+        $this->post('/area-clienti/richieste', ['website_id' => $site['website']->id, 'request_text' => ''])->assertRedirect();
+    }
+    $this->post('/area-clienti/richieste', ['website_id' => $site['website']->id, 'request_text' => ''])->assertStatus(429);
 });

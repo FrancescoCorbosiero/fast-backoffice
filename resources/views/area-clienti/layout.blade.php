@@ -48,6 +48,15 @@
         .request-text { white-space: pre-wrap; }
         .preview { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
         ul.paths { padding-left: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+        input[type=file] { width: 100%; font: inherit; font-size: 15px; padding: 10px 0; }
+        .hint { margin: 6px 0 0; }
+        details.photos { margin-top: 12px; }
+        details.photos summary { cursor: pointer; font-weight: 600; }
+        details.photos ul { list-style: none; margin: 12px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+        details.photos li { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        details.photos li .muted { font-size: 12px; overflow-wrap: anywhere; }
+        details.photos img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+        .photo-gone { display: flex; align-items: center; justify-content: center; height: 120px; border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; }
         @media (min-width: 640px) { .actions { display: flex; gap: 10px; } .actions form { flex: 1; margin: 0; } }
     </style>
 </head>
