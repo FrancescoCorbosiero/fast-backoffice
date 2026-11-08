@@ -39,6 +39,7 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | Start scheduled campaigns / reconcile campaigns / sync Cal.com now | `php artisan scheduling:run mail.start-scheduled` · `mail.reconcile` · `calendar.sync` |
 | Check every monitored website now | `php artisan scheduling:run websites.uptime-check` |
 | Re-dispatch approved change requests whose deploy never ran | `php artisan scheduling:run pipeline.deploy-approved` |
+| Delete the photos of change requests over for more than 90 days | `php artisan scheduling:run pipeline.prune-attachments` |
 | Pipeline worker (production only; the only consumer of the pipeline queue; attempts are set by the job class) | `php artisan queue:work redis-pipeline --queue=pipeline --timeout=3900` |
 | Read the PEC mailbox now / send issued invoices now | `php artisan scheduling:run invoicing.pec-inbox` · `php artisan scheduling:run invoicing.sdi-send` |
 | PEC round-trip test against a local mail server | `PEC_TEST_HOST=127.0.0.1 vendor/bin/pest tests/Feature/Invoicing/PecMailboxIntegrationTest.php` (GreenMail on 3025/3143; CI does this) |
