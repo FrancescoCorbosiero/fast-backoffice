@@ -1,0 +1,19 @@
+# Never in an image: configuration and secrets come from the environment at
+# run time (docker-compose.prod.yml: env_file, the deploy key mounted
+# read-only). COPY . . would otherwise bake them into a layer that a later
+# rm cannot remove.
+.env
+.env.*
+docker/secrets
+auth.json
+storage/*.key
+
+# Rebuilt in the image or not needed there.
+.git
+vendor
+node_modules
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php

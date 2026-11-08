@@ -20,7 +20,7 @@ Files (PDFs, XML, PEC envelopes) are in the S3-compatible bucket `FILES_S3_BUCKE
 ## 2. First deploy
 
 1. A server with Docker and Compose, DNS for `$DOMAIN` pointing at it, ports 80 and 443 open.
-2. `git clone` the repository; `cp .env.production.example .env.production`; fill every value. `APP_KEY`: `docker run --rm fast-backoffice/app php artisan key:generate --show` (after the first build), or any `base64:` 32-byte key.
+2. `git clone` the repository; `cp .env.production.example .env.production`; fill every value. Then, so that a plain `docker compose …` on the server reads the right file and the right variables (every command below spells them out; this makes forgetting them harmless): `ln -s .env.production .env` and add `COMPOSE_FILE=docker-compose.prod.yml` to `.env.production` (`docker-compose.prod.yml:docker-compose.proxy.yml` behind a proxy, §2b). Neither file reaches the image: `.dockerignore` keeps `.env*` and `docker/secrets` out. `APP_KEY`: `docker run --rm fast-backoffice/app php artisan key:generate --show` (after the first build), or any `base64:` 32-byte key.
 3. Build and start:
 
 ```bash
@@ -36,7 +36,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec app ph
 ```
 
 5. Sign in at `https://$DOMAIN/admin` (two-factor authentication is optional: profile page, when you want it), then fill Impostazioni: profilo aziendale, fatture, numerazione, SdI e PEC (sdi.md §9), campagne email.
-6. External services: SES (verify the sender, create an SNS topic subscribed to `https://$DOMAIN/webhooks/ses`, put its ARN in `SES_SNS_TOPIC_ARN`); Cal.com (a webhook to `https://$DOMAIN/webhooks/calcom` with the secret in `CALCOM_WEBHOOK_SECRET`, an API key in `CALCOM_API_KEY`).
+6. External services: SES (verify the domain of `MAIL_FROM_ADDRESS` in the region of `AWS_DEFAULT_REGION`, or SES rejects every mail with "Email address is not verified"; request production access, since the sandbox delivers only to verified recipients; create an SNS topic subscribed to `https://$DOMAIN/webhooks/ses`, put its ARN in `SES_SNS_TOPIC_ARN`); Cal.com (a webhook to `https://$DOMAIN/webhooks/calcom` with the secret in `CALCOM_WEBHOOK_SECRET`, an API key in `CALCOM_API_KEY`).
 7. The pipeline worker (docs/pipeline.md §3): `ANTHROPIC_API_KEY` and `PIPELINE_*` in `.env.production`; a deploy key for the clients' repositories at `docker/secrets/pipeline_deploy_key` (owned by the container's `www-data`, uid 82: `chown 82 docker/secrets/pipeline_deploy_key && chmod 0400 …`; mounted read-only into `pipeline-worker`, named by `PIPELINE_GIT_SSH_COMMAND`; the worker's user must be able to read it, and the build commands run as that same user: docs/pipeline.md §3); the `worker` image built with the others. On every client repository, **protect the default branch on the remote**: no force-push, no deletion, and, where the provider allows it, let the pipeline's credential push only `req/*` and `pipeline/*` (GitHub rulesets or GitLab protected branches with a key restricted to those patterns). The runner never pushes the default branch except by fast-forward from the deploy actions; this is the second net behind that rule. Previews need the wildcard vhost of docs/pipeline.md §5 (not part of the images yet).
 8. Check `https://$DOMAIN/up` answers 200, `/admin` asks for a login and `/area-clienti/` shows the sign-in form.
 
