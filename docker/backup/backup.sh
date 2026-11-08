@@ -2,7 +2,12 @@
 # One database backup: pg_dump (custom format, compressed) to
 # s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PREFIX/<date>.dump, keeping the last
 # BACKUP_KEEP_DAYS days. Files (PDFs, XML, PEC envelopes) already live in
-# S3-compatible storage: turn versioning on for that bucket.
+# S3-compatible storage: turn versioning on for that bucket. The
+# change-request photos (the pipeline_uploads volume, mounted at
+# /srv/pipeline-uploads) are mirrored to
+# s3://$BACKUP_S3_BUCKET/$BACKUP_S3_UPLOADS_PREFIX/: a photo the retention job
+# deleted goes from the mirror too; versioning on the backup bucket keeps
+# the earlier versions (runbook §4).
 #
 # Needs: DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD,
 # BACKUP_S3_BUCKET, BACKUP_S3_ENDPOINT (optional), AWS_ACCESS_KEY_ID,
@@ -40,3 +45,12 @@ aws $ENDPOINT_FLAG s3 ls "s3://${BACKUP_S3_BUCKET}/${PREFIX}/" | awk '{print $4}
         echo "pruned $name"
     fi
 done
+
+# The change-request photos: a mirror, so deletions follow.
+UPLOADS_DIR="${BACKUP_UPLOADS_DIR:-/srv/pipeline-uploads}"
+UPLOADS_PREFIX="${BACKUP_S3_UPLOADS_PREFIX:-pipeline-uploads}"
+if [ -d "$UPLOADS_DIR" ]; then
+    # shellcheck disable=SC2086
+    aws $ENDPOINT_FLAG s3 sync "$UPLOADS_DIR/" "s3://${BACKUP_S3_BUCKET}/${UPLOADS_PREFIX}/" --delete --only-show-errors
+    echo "pipeline uploads mirrored to ${UPLOADS_PREFIX}/"
+fi

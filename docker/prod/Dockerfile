@@ -37,11 +37,13 @@ COPY --chown=www-data:www-data . .
 COPY --from=vendor --chown=www-data:www-data /build/vendor ./vendor
 
 # Scripts were skipped in the vendor stage (they need the app): run the ones that matter here.
+# storage/app/pipeline-uploads exists, owned by www-data, so the pipeline_uploads
+# volume starts with that owner whichever container mounts it first.
 RUN php artisan package:discover --ansi \
     && php artisan filament:assets --ansi \
     && php artisan filament:upgrade --ansi \
     && rm -rf tests docker docs .git .github \
-    && mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
+    && mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache storage/app/pipeline-uploads \
     && chown -R www-data:www-data storage bootstrap/cache
 
 COPY --chmod=0755 docker/prod/entrypoint.sh /usr/local/bin/entrypoint
