@@ -6,6 +6,7 @@ namespace App\Modules\Pipeline\Models;
 
 use App\Modules\Pipeline\Data\ChangeRequestAttachmentData;
 use App\Modules\Pipeline\Data\ChangeRequestData;
+use App\Modules\Pipeline\Data\ConversationTurn;
 use App\Modules\Pipeline\Database\Factories\ChangeRequestFactory;
 use App\Modules\Pipeline\Enums\ChangeRequestKind;
 use App\Modules\Pipeline\Enums\ChangeRequestStatus;
@@ -42,6 +43,7 @@ use LogicException;
  * @property ?CarbonImmutable $deploy_started_at
  * @property ?int $cost_cents
  * @property ?CarbonImmutable $finished_at
+ * @property ?list<array<array-key, mixed>> $conversation
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read Collection<int, ChangeRequestAttachment> $attachments
@@ -70,6 +72,7 @@ class ChangeRequest extends Model
             'status' => ChangeRequestStatus::class,
             'touched_paths' => 'array',
             'generated_files' => 'array',
+            'conversation' => 'array',
             'decided_by' => DecidedBy::class,
             'decided_at' => 'immutable_datetime',
             'deploy_started_at' => 'immutable_datetime',
@@ -133,6 +136,14 @@ class ChangeRequest extends Model
         $this->forceFill(['log' => mb_substr($log, -self::LOG_LIMIT)])->save();
     }
 
+    /**
+     * Adds a turn to the request's exchange; the caller saves, together with the status.
+     */
+    public function addTurn(ConversationTurn $turn): void
+    {
+        $this->conversation = [...($this->conversation ?? []), $turn->toArray()];
+    }
+
     public function toData(): ChangeRequestData
     {
         return new ChangeRequestData(
@@ -160,6 +171,7 @@ class ChangeRequest extends Model
             createdAt: $this->created_at,
             updatedAt: $this->updated_at,
             attachments: array_values($this->attachments->map(fn (ChangeRequestAttachment $attachment): ChangeRequestAttachmentData => $attachment->toData())->all()),
+            conversation: array_values(array_map(fn (array $turn): ConversationTurn => ConversationTurn::fromArray($turn), array_filter($this->conversation ?? [], is_array(...)))),
         );
     }
 }

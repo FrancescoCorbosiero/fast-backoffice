@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Pipeline\Http\Portal;
 
+use App\Modules\Pipeline\Actions\AnswerChangeRequest;
 use App\Modules\Pipeline\Actions\ApproveChangeRequest;
 use App\Modules\Pipeline\Actions\RejectChangeRequest;
 use App\Modules\Pipeline\Actions\SubmitChangeRequest;
@@ -27,7 +28,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * The three screens of the portal: my requests, a new request (with its
- * photos), one request with its preview and the decision. A client only
+ * photos), one request with its preview and the decision, or the agent's
+ * questions and the client's answer. A client only
  * ever sees their own (ChangeRequestPolicy).
  */
 final class RequestsController
@@ -101,6 +103,8 @@ final class RequestsController
             'request' => $model->toData(),
             'status' => $request->session()->get('portal.status'),
             'keepDays' => $config->attachmentKeepDays(),
+            'errors_' => $request->session()->get('errors'),
+            'maxAnswer' => AnswerChangeRequest::MAX_LENGTH,
         ]);
     }
 
@@ -131,6 +135,31 @@ final class RequestsController
         }
 
         return redirect()->route('portal.requests.show', ['id' => $id])->with('portal.status', 'Ricevuto: la modifica non verrà pubblicata. Se vuoi, fai una nuova richiesta spiegando meglio cosa ti serve.');
+    }
+
+    public function answer(Request $request, int $id, AnswerChangeRequest $answer): RedirectResponse
+    {
+        $client = $this->client($request);
+        $model = $this->own($client, $id);
+
+        $choices = [];
+        $input = $request->input('choices');
+        foreach (is_array($input) ? $input : [] as $index => $choice) {
+            if (is_int($index) && is_string($choice)) {
+                $choices[$index] = $choice;
+            }
+        }
+        $note = $request->input('note');
+
+        try {
+            $answer->answer($model->id, $choices, is_string($note) ? $note : '', $client->contactId);
+        } catch (ValidationException $exception) {
+            return redirect()->route('portal.requests.show', ['id' => $id])->withInput()->withErrors($exception->validator);
+        } catch (LogicException) {
+            return redirect()->route('portal.requests.show', ['id' => $id])->with('portal.status', 'Questa richiesta non aspetta più una risposta.');
+        }
+
+        return redirect()->route('portal.requests.show', ['id' => $id])->with('portal.status', 'Grazie! Riprendiamo la richiesta con la tua risposta.');
     }
 
     private function client(Request $request): ClientUser

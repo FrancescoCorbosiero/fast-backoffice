@@ -33,8 +33,42 @@
                     <p class="muted">Le foto restano qui fino a {{ $keepDays }} giorni dopo la chiusura della richiesta, poi le cancelliamo.</p>
                 </details>
             @endif
+            @foreach ($request->conversation as $turn)
+                @continue($turn === $request->pendingQuestion())
+                <div class="turn">
+                    <p class="muted">{{ $turn->isAgent() ? 'Ti abbiamo chiesto' : 'Hai risposto' }} · {{ $turn->at->isoFormat('D MMM YYYY, HH:mm') }}</p>
+                    <p class="request-text">{{ $turn->text }}</p>
+                </div>
+            @endforeach
         </div>
     @endunless
+
+    @if (($question = $request->pendingQuestion()) !== null)
+        <div class="card">
+            <h2>Ci serve una tua risposta</h2>
+            <p class="request-text">{{ $question->text }}</p>
+            <form method="post" action="{{ route('portal.requests.answer', ['id' => $request->id]) }}" style="margin-top:16px">
+                @csrf
+                @foreach ($question->questions as $index => $asked)
+                    <fieldset class="question">
+                        <legend>{{ $asked->question }}</legend>
+                        @foreach ($asked->options as $option)
+                            <label class="choice"><input type="radio" name="choices[{{ $index }}]" value="{{ $option }}" @checked(old('choices.'.$index) === $option)> <span>{{ $option }}</span></label>
+                        @endforeach
+                    </fieldset>
+                @endforeach
+                <div class="field">
+                    <label for="note">{{ $question->questions === [] ? 'La tua risposta' : 'Altro da aggiungere' }} @if ($question->questions !== [])<span class="muted">(facoltativo, anche al posto delle scelte)</span>@endif</label>
+                    <textarea id="note" name="note" maxlength="{{ $maxAnswer }}" style="min-height:100px">{{ old('note') }}</textarea>
+                    @if ($errors_?->has('answer'))<div class="error">{{ $errors_->first('answer') }}</div>@endif
+                </div>
+                <button class="btn" type="submit">Invia la risposta</button>
+            </form>
+            @if ($request->availableAttachments() !== [])
+                <p class="muted" style="margin-top:12px">Le foto che hai allegato restano con la richiesta: non serve allegarle di nuovo.</p>
+            @endif
+        </div>
+    @endif
 
     @if ($request->status === \App\Modules\Pipeline\Enums\ChangeRequestStatus::Failed && $request->clientError !== null && ! $request->isOnboarding())
         <div class="card">

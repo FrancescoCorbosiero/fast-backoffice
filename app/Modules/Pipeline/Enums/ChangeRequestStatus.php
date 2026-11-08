@@ -8,8 +8,12 @@ namespace App\Modules\Pipeline\Enums;
  * The lifecycle of a request (design.md §5.6):
  *
  *   received → queued → running → preview_ready → approved → deployed
- *                          │            │              └──────→ failed
- *                          └→ failed    └→ rejected
+ *                ↑         │  │         │              └──────→ failed
+ *                │         │  └→ failed └→ rejected
+ *                └─ needs_input ←┘
+ *
+ * needs_input: the run changed nothing and asked the client something; the
+ * client's answer queues the same request again (docs/pipeline.md §1).
  *
  * Every write of the status goes through canBecome(), so a job that runs
  * late or twice can't move a request backwards.
@@ -24,6 +28,7 @@ enum ChangeRequestStatus: string
     case Rejected = 'rejected';
     case Deployed = 'deployed';
     case Failed = 'failed';
+    case NeedsInput = 'needs_input';
 
     public function canBecome(self $next): bool
     {
@@ -38,7 +43,8 @@ enum ChangeRequestStatus: string
         return match ($this) {
             self::Received => [self::Queued],
             self::Queued => [self::Running],
-            self::Running => [self::PreviewReady, self::Failed],
+            self::Running => [self::PreviewReady, self::Failed, self::NeedsInput],
+            self::NeedsInput => [self::Queued],
             self::PreviewReady => [self::Approved, self::Rejected],
             self::Approved => [self::Deployed, self::Failed],
             self::Rejected, self::Deployed, self::Failed => [],
@@ -55,6 +61,11 @@ enum ChangeRequestStatus: string
         return $this === self::PreviewReady;
     }
 
+    public function awaitsAnswer(): bool
+    {
+        return $this === self::NeedsInput;
+    }
+
     public function label(): string
     {
         return match ($this) {
@@ -66,6 +77,7 @@ enum ChangeRequestStatus: string
             self::Rejected => 'Rifiutata',
             self::Deployed => 'Pubblicata',
             self::Failed => 'Fallita',
+            self::NeedsInput => 'Serve una risposta',
         };
     }
 
@@ -74,7 +86,7 @@ enum ChangeRequestStatus: string
         return match ($this) {
             self::Received, self::Queued => 'gray',
             self::Running => 'info',
-            self::PreviewReady => 'warning',
+            self::PreviewReady, self::NeedsInput => 'warning',
             self::Approved, self::Deployed => 'success',
             self::Rejected, self::Failed => 'danger',
         };
@@ -93,6 +105,7 @@ enum ChangeRequestStatus: string
             self::Rejected => 'La modifica è stata rifiutata e non verrà pubblicata.',
             self::Deployed => 'La modifica è online.',
             self::Failed => 'Non siamo riusciti a completare la richiesta: lo studio la riguarderà.',
+            self::NeedsInput => 'Prima di procedere ci serve una tua risposta: la trovi qui sotto.',
         };
     }
 

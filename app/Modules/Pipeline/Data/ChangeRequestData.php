@@ -21,6 +21,7 @@ final readonly class ChangeRequestData
      * @param  list<string>  $touchedPaths  files the run changed, relative to the repository
      * @param  array<string, string>  $generatedFiles  path → content, for onboarding
      * @param  list<ChangeRequestAttachmentData>  $attachments  the images, in the client's order; removed ones included
+     * @param  list<ConversationTurn>  $conversation  the exchange after a run that asked something, oldest first
      */
     public function __construct(
         public int $id,
@@ -47,6 +48,7 @@ final readonly class ChangeRequestData
         public CarbonImmutable $createdAt,
         public CarbonImmutable $updatedAt,
         public array $attachments = [],
+        public array $conversation = [],
     ) {}
 
     public function reference(): Reference
@@ -62,6 +64,22 @@ final readonly class ChangeRequestData
     public function awaitsDecision(): bool
     {
         return $this->status->awaitsDecision();
+    }
+
+    public function awaitsAnswer(): bool
+    {
+        return $this->status->awaitsAnswer();
+    }
+
+    /**
+     * What the agent asked last, when the request is waiting for the
+     * client's answer.
+     */
+    public function pendingQuestion(): ?ConversationTurn
+    {
+        $last = $this->conversation === [] ? null : $this->conversation[array_key_last($this->conversation)];
+
+        return $this->awaitsAnswer() && $last !== null && $last->isAgent() ? $last : null;
     }
 
     /**

@@ -89,6 +89,7 @@ class PipelineServiceProvider extends ModuleServiceProvider
                 Route::get('/richieste/{id}/foto/{attachment}', [AttachmentsController::class, 'portal'])->whereNumber(['id', 'attachment'])->name('requests.attachment');
                 Route::post('/richieste/{id}/approva', [RequestsController::class, 'approve'])->whereNumber('id')->name('requests.approve');
                 Route::post('/richieste/{id}/rifiuta', [RequestsController::class, 'reject'])->whereNumber('id')->name('requests.reject');
+                Route::post('/richieste/{id}/rispondi', [RequestsController::class, 'answer'])->whereNumber('id')->middleware('throttle:10,1')->name('requests.answer');
             });
         });
     }

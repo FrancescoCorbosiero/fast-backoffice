@@ -6,11 +6,14 @@ namespace App\Modules\Pipeline\Actions;
 
 use App\Modules\Audit\Actions\RecordAuditEntry;
 use App\Modules\Pipeline\Data\ChangeRequestData;
+use App\Modules\Pipeline\Data\ConversationTurn;
 use App\Modules\Pipeline\Enums\ChangeRequestStatus;
+use App\Modules\Pipeline\Events\ChangeRequestNeedsInput;
 use App\Modules\Pipeline\Events\ChangeRequestStarted;
 use App\Modules\Pipeline\Events\PreviewReady;
 use App\Modules\Pipeline\Models\ChangeRequest;
 use App\Modules\Pipeline\Queries\WebsitePipelines;
+use App\Modules\Pipeline\Support\AgentQuestions;
 use App\Modules\Pipeline\Support\ManifestReader;
 use App\Modules\Pipeline\Support\PathPolicy;
 use App\Modules\Pipeline\Support\PipelineConfig;
@@ -25,14 +28,17 @@ use App\Modules\Repositories\Queries\Repositories;
 use App\Modules\Websites\Queries\Websites;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Support\Facades\Date;
 use RuntimeException;
 use Throwable;
 
 /**
  * The body of RunStaticSiteRequest: the run on req/<id> (with the
  * request's photos waiting in pipeline-uploads/), the path gate, the
- * manifest's build, the preview, the push. Anything that goes wrong ends
- * the request as failed, with the reason for the owner and the client.
+ * manifest's build, the preview, the push. A run that changes nothing and
+ * says why waits for the client's answer (needs_input); anything that goes
+ * wrong ends the request as failed, with the reason for the owner and the
+ * client.
  */
 final readonly class RunChangeRequest
 {
@@ -122,8 +128,11 @@ final readonly class RunChangeRequest
             );
         }
         if (! $outcome->hasCommits) {
-            $explanation = $outcome->resultText !== '' ? $outcome->resultText : 'Nessuna modifica: la richiesta non ha prodotto commit.';
-            throw new RefusedRun($explanation, $explanation);
+            if (trim($outcome->resultText) === '') {
+                throw new RefusedRun('Nessuna modifica: la richiesta non ha prodotto commit.', 'Nessuna modifica: la richiesta non ha prodotto commit.');
+            }
+
+            return $this->askClient($request, $outcome->resultText);
         }
 
         $build = $this->runner->shell($dir, $manifest->build, $this->config->buildTimeoutSeconds());
@@ -151,6 +160,31 @@ final readonly class RunChangeRequest
             return $request->toData();
         });
         $this->events->dispatch(new PreviewReady($data->id, $data->websiteId, $data->contactId, $data->previewUrl));
+
+        return $data;
+    }
+
+    /**
+     * The agent changed nothing and said why, often with questions: the
+     * request waits for the client, whose answer queues it again with the
+     * same photos (AnswerChangeRequest).
+     */
+    private function askClient(ChangeRequest $request, string $answer): ChangeRequestData
+    {
+        ['text' => $text, 'questions' => $questions] = AgentQuestions::parse($answer);
+        if ($text === '') {
+            $text = 'Prima di procedere mi servono alcune informazioni.';
+        }
+
+        $data = $this->db->transaction(function () use ($request, $text, $questions): ChangeRequestData {
+            $request->refresh();
+            $request->addTurn(new ConversationTurn(ConversationTurn::AGENT, mb_substr($text, 0, 4000), Date::now()->toImmutable(), $questions));
+            $request->moveTo(ChangeRequestStatus::NeedsInput, ['error' => null, 'client_error' => null]);
+            $this->audit->record('pipeline.change_request.needs_input', $request->toData()->reference(), ['questions' => count($questions)]);
+
+            return $request->toData();
+        });
+        $this->events->dispatch(new ChangeRequestNeedsInput($data->id, $data->websiteId, $data->contactId));
 
         return $data;
     }
