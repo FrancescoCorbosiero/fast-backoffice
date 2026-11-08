@@ -10,7 +10,8 @@
 # worker (docs/pipeline.md §3), the only consumer of the pipeline queue.
 # "web" is Caddy with the public directory (Filament's published assets
 # included), talking to app over FastCGI. Nothing from require-dev is
-# installed, no .env is baked in: configuration comes from the environment.
+# installed, no .env is baked in: configuration comes from the environment
+# (.dockerignore keeps .env* and docker/secrets out of the build context).
 
 # --- 1. Dependencies -------------------------------------------------------
 FROM composer:2 AS vendor

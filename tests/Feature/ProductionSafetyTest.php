@@ -67,6 +67,16 @@ it('keeps development tooling out of the runtime dependencies', function (): voi
     expect((string) file_get_contents(base_path('docker/prod/entrypoint.sh')))->toContain('APP_KEY is not set');
 });
 
+it('keeps .env files and the deploy key out of the images', function (): void {
+    // The Dockerfile copies the whole build context: without these lines
+    // .env.production (every secret) and the pipeline's deploy key end up in
+    // the app and worker images, where the worker's client code can read them.
+    $ignored = preg_split('/\R/', (string) file_get_contents(base_path('.dockerignore')));
+
+    expect($ignored)->toContain('.env')->toContain('.env.*')->toContain('docker/secrets')
+        ->and((string) file_get_contents(base_path('docker/prod/Dockerfile')))->toContain('COPY --chown=www-data:www-data . .');
+});
+
 it('debug is off unless the environment says otherwise', function (): void {
     expect((string) file_get_contents(base_path('config/app.php')))->toContain("'debug' => (bool) env('APP_DEBUG', false)")
         ->and(config('app.env'))->toBe('testing');

@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+#
+# Production without the long commands (docs/runbook.md). Every command runs
+# Docker Compose with .env.production and the production compose files, so
+# the containers are always created from that file. Run it from anywhere;
+# "bin/prod help" lists the commands.
+#
+# The compose files: COMPOSE_FILE in .env.production when it is set
+# (docker-compose.prod.yml:docker-compose.proxy.yml behind caddy-docker-proxy,
+# runbook §2b); otherwise the files the running containers were created
+# with, so an up never drops the proxy overlay; otherwise
+# docker-compose.prod.yml.
+
+set -euo pipefail
+
+readonly env_file=.env.production
+
+usage() {
+    cat <<'USAGE'
+Usage: bin/prod <command>
+
+  status                what runs, and whether it runs with the current .env.production
+  up [service...]       create or recreate what changed, e.g. after editing .env.production
+  deploy [--no-pull]    a new version: git pull, build, migrate, restart (runbook §3)
+  artisan <command...>  php artisan in the app container
+  mail-test <address>   send a test email now and show what the mail provider answered
+  logs [service...]     the logs (app, horizon, scheduler and web when no service is named)
+  shell [service]       a shell in a container (app when none is named)
+  backup                back up the database and the photos now
+  restore-drill         the monthly restore drill (runbook §4)
+  compose <args...>     any other docker compose command, with the same files
+
+Every command runs Docker Compose with .env.production and the production
+compose files: docs/runbook.md.
+USAGE
+}
+
+fail() {
+    printf 'bin/prod: %s\n' "$*" >&2
+    exit 1
+}
+
+note() {
+    printf '\n%s\n' "$*"
+}
+
+compose_args=()
+compose_files_label=''
+
+# Chooses the compose files once, before any command runs.
+resolve_compose_files() {
+    # .env.production decides, not a COMPOSE_FILE left in the shell.
+    unset COMPOSE_FILE
+
+    if grep -Eq '^[[:space:]]*COMPOSE_FILE[[:space:]]*=' "$env_file"; then
+        # Compose reads COMPOSE_FILE from the env file when no -f is given.
+        compose_args=(--env-file "$env_file")
+        compose_files_label='COMPOSE_FILE in .env.production'
+        return
+    fi
+
+    local created_with file
+    local -a files=()
+    created_with=$(files_of_running_containers) || created_with=''
+    if [ -n "$created_with" ]; then
+        IFS=',' read -r -a files <<<"$created_with"
+        for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+                files=()
+                break
+            fi
+        done
+    fi
+
+    compose_args=()
+    if [ "${#files[@]}" -gt 0 ]; then
+        for file in "${files[@]}"; do
+            compose_args+=(-f "$file")
+            compose_files_label+="${compose_files_label:+ + }${file##*/}"
+        done
+        compose_files_label+=' (as the running containers were created; COMPOSE_FILE in .env.production can name them)'
+    else
+        compose_args=(-f docker-compose.prod.yml)
+        compose_files_label='docker-compose.prod.yml'
+    fi
+    compose_args+=(--env-file "$env_file")
+}
+
+# The compose files the project's containers were created with, as Compose
+# recorded them on the containers: absolute paths, comma-separated.
+files_of_running_containers() {
+    local id
+    id=$(docker compose -f docker-compose.prod.yml --env-file "$env_file" ps -aq 2>/dev/null | head -n 1) || return 0
+    [ -n "$id" ] || return 0
+    docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$id" 2>/dev/null || true
+}
+
+compose() {
+    docker compose "${compose_args[@]}" "$@"
+}
+
+# Is the pipeline worker in the middle of a job? Recreating it then cuts the
+# run short: the request ends failed and "Ripeti richiesta" starts it again.
+# When the answer is unknown, it is "yes".
+worker_busy() {
+    local running reserved
+    running=$(compose ps -q pipeline-worker 2>/dev/null) || return 0
+    [ -n "$running" ] || return 1
+    reserved=$(compose exec -T app php artisan tinker --execute \
+        'echo Illuminate\Support\Facades\Queue::connection(config("pipeline.queue.connection"))->reservedSize(config("pipeline.queue.name"));' 2>/dev/null) || return 0
+    [ "$reserved" != 0 ]
+}
+
+worker_later() {
+    note "The pipeline worker is in the middle of a request, so it was left as it is. When Asset > Richieste di modifica shows none \"In lavorazione\": bin/prod up pipeline-worker"
+}
+
+# One line per container: service, state, creation time, the configuration
+# hash Compose gave it, the image it runs and that image's name.
+container_states() {
+    local ids
+    ids=$(compose ps -aq) || return 0
+    [ -n "$ids" ] || return 0
+    # shellcheck disable=SC2086 # one container id per word
+    docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }} {{ .State.Status }} {{ .Created }} {{ index .Config.Labels "com.docker.compose.config-hash" }} {{ .Image }} {{ .Config.Image }}' $ids
+}
+
+# Printed by the app itself, so it shows the configuration it runs with.
+# Straight to STDOUT: tinker squeezes the spaces out of what is echoed.
+# shellcheck disable=SC2016 # PHP's variables, not the shell's
+readonly app_summary_php='
+$mailer = config("mail.default");
+$from = (string) config("mail.from.address");
+$lines = [sprintf("  mail    the %s mailer, from %s%s", $mailer, $from, $mailer === "ses" ? ", SES region ".config("services.ses.region") : "")];
+if (preg_match("/@example\.(com|it|net|org|test)$/i", $from) === 1) {
+    $lines[] = "          MAIL_FROM_ADDRESS is still a placeholder: the provider only sends from a domain you verified with it";
+}
+$failed = Illuminate\Support\Facades\DB::table("failed_jobs")->count();
+$lines[] = sprintf("  queue   %d failed %s%s", $failed, $failed === 1 ? "job" : "jobs", $failed > 0 ? ": bin/prod artisan queue:failed" : "");
+fwrite(STDOUT, implode("\n", $lines)."\n");
+'
+
+status() {
+    local expected running service hash line state created have image name current verdict
+
+    printf 'Compose files    %s\n' "$compose_files_label"
+    printf '.env.production  last changed %s\n\n' "$(date -u -r "$env_file" '+%Y-%m-%d %H:%M UTC')"
+
+    expected=$(compose config --hash '*') || fail 'Docker Compose could not read the compose files with .env.production (the error is above).'
+    running=$(container_states)
+
+    printf '%-16s %-11s %-17s %s\n' SERVICE STATE 'CREATED (UTC)' 'UP TO DATE (with .env.production, the compose files and the images as they are now)'
+    while read -r service hash; do
+        [ -n "$service" ] || continue
+        line=$(awk -v service="$service" '$1 == service { print; exit }' <<<"$running")
+        if [ -z "$line" ]; then
+            printf '%-16s %-11s %-17s %s\n' "$service" '-' '-' 'not created: bin/prod up creates it'
+            continue
+        fi
+        read -r _ state created have image name <<<"$line"
+        current=$(docker image inspect --format '{{ .Id }}' "$name" 2>/dev/null) || current=''
+        if [ "$have" != "$hash" ]; then
+            verdict='no, created before .env.production or the compose files changed: bin/prod up recreates it'
+        elif [ -n "$current" ] && [ "$current" != "$image" ]; then
+            verdict='no, its image was rebuilt since: bin/prod up recreates it'
+        else
+            verdict='yes'
+        fi
+        created=${created:0:16}
+        printf '%-16s %-11s %-17s %s\n' "$service" "$state" "${created/T/ }" "$verdict"
+    done <<<"$expected"
+
+    printf '\nThe app, as configured when its container started:\n'
+    compose exec -T app php artisan tinker --execute "$app_summary_php" 2>/dev/null || printf '  not reachable: is app running?\n'
+}
+
+up() {
+    local -a services=()
+    if [ $# -eq 0 ] && worker_busy; then
+        while read -r service; do
+            [ -z "$service" ] || [ "$service" = pipeline-worker ] || services+=("$service")
+        done <<<"$(compose config --services)"
+        set -- "${services[@]}"
+        compose up -d "$@"
+        worker_later
+        return
+    fi
+    compose up -d "$@"
+}
+
+deploy() {
+    if [ "${1-}" != --no-pull ]; then
+        git pull --ff-only
+        # The rest runs from the version just pulled, which may deploy differently.
+        exec bin/prod deploy --no-pull
+    fi
+
+    compose build
+    compose up -d --no-deps app web
+    # After the new app is up, before the workers restart: runbook §3.
+    compose exec -T app php artisan migrate --force
+    compose up -d --no-deps horizon scheduler
+    compose exec -T horizon php artisan horizon:terminate
+    compose up -d --no-deps backup
+    if worker_busy; then
+        worker_later
+    else
+        compose up -d --no-deps pipeline-worker
+    fi
+
+    note 'Deployed.'
+    status
+}
+
+restore_drill() {
+    compose exec -T backup restore latest
+    # The scratch database restore made, dropped once its counts are printed.
+    # The variables are the pgsql container's own, expanded there.
+    # shellcheck disable=SC2016
+    compose exec -T pgsql sh -c 'psql -U "$POSTGRES_USER" -d postgres -qc "DROP DATABASE IF EXISTS \"${POSTGRES_DB}_restore_test\";"'
+    compose exec -T backup restore-uploads
+    note 'Compare the contacts and invoices above with the panel; the scratch database is already dropped.'
+}
+
+logs() {
+    [ $# -gt 0 ] || set -- app horizon scheduler web
+    if [ -t 1 ]; then
+        compose logs --follow --tail=100 "$@"
+    else
+        compose logs --tail=500 "$@"
+    fi
+}
+
+main() {
+    local command=${1-help}
+    [ $# -eq 0 ] || shift
+
+    case $command in
+        help | -h | --help)
+            usage
+            return
+            ;;
+    esac
+
+    cd "$(dirname "$0")/.."
+    [ -f "$env_file" ] || fail "no $env_file in $PWD: copy .env.production.example to $env_file and fill it in (docs/runbook.md §2)."
+    command -v docker >/dev/null || fail 'docker is not installed on this machine.'
+    resolve_compose_files
+
+    case $command in
+        status) status ;;
+        up) up "$@" ;;
+        deploy) deploy "$@" ;;
+        artisan)
+            [ $# -gt 0 ] || fail 'usage: bin/prod artisan <command> [arguments]'
+            compose exec app php artisan "$@"
+            ;;
+        mail-test)
+            [ $# -gt 0 ] || fail 'usage: bin/prod mail-test <address> [--mailer=<name>]'
+            compose exec app php artisan mail:test "$@"
+            ;;
+        logs) logs "$@" ;;
+        shell) compose exec "${1:-app}" sh ;;
+        backup) compose exec -T backup backup ;;
+        restore-drill) restore_drill ;;
+        compose) compose "$@" ;;
+        restart)
+            fail "there is no restart: a restarted container keeps the .env.production it was created with. bin/prod up recreates what changed; bin/prod compose restart <service> restarts one as it is."
+            ;;
+        *)
+            usage >&2
+            exit 1
+            ;;
+    esac
+}
+
+# On one line: bash has read all of it before git pull can replace the file.
+main "$@"; exit

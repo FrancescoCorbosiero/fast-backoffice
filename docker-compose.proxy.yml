@@ -1,7 +1,8 @@
 # Overlay for a VPS where an external caddy-docker-proxy already owns ports
-# 80/443 and routes by Docker labels (runbook §2b):
+# 80/443 and routes by Docker labels (runbook §2b). Name it in .env.production,
+# and bin/prod (and Compose) adds it to every command:
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.proxy.yml --env-file .env.production up -d --build
+#   COMPOSE_FILE=docker-compose.prod.yml:docker-compose.proxy.yml
 #
 # "web" publishes no ports, speaks plain HTTP on the "caddy" network and
 # tells the proxy which host to route; TLS stays with the proxy.
