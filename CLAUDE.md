@@ -45,7 +45,8 @@ fast-backoffice is a single-user back office for an Italian web studio: clients 
 | PEC round-trip test against a local mail server | `PEC_TEST_HOST=127.0.0.1 vendor/bin/pest tests/Feature/Invoicing/PecMailboxIntegrationTest.php` (GreenMail on 3025/3143; CI does this) |
 | Serve locally | `php artisan serve` (then `/admin`) |
 | Docker development environment | `docker compose up -d` (the first start installs and migrates), then the commands above through `docker compose exec app …` |
-| Production (build, deploy, backups, restore drill) | `docs/runbook.md`; `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` |
+| Production on the server (status, up, deploy, artisan, logs, backups, restore drill) | `bin/prod help`: every command runs Compose with `.env.production` and the production files; `docs/runbook.md` |
+| Send a test email now and see the provider's answer | `php artisan mail:test you@example.test` (`bin/prod mail-test` in production) |
 
 Tests run on PostgreSQL: `phpunit.xml` points at `fast_backoffice_test` on `127.0.0.1` with user and password `fast` (CI overrides these with its service container; `docker/pgsql/create-test-database.sql` creates it in Docker). The Docker images run PHP 8.4; `composer.lock` is resolved for PHP 8.3 so it installs on both.
 
