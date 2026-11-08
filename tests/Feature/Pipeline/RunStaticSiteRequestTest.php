@@ -149,6 +149,20 @@ it('counts uncommitted, untracked and ignored files in the gate too, and tells t
         ->and($this->fake->ran('git clean -fdx'))->toBeTrue();
 });
 
+it('reads git\'s listings unquoted, so a path with an accent is still inside the editable paths', function (): void {
+    // Without -z, git prints "content/caff\303\250.md" (core.quotePath), which no editable path matches.
+    $this->fake->touched = ['content/caffè.md', 'content/menù del giorno.md'];
+    $this->fake->untracked = ['layouts/perché.html'];
+
+    $request = runJob($this->request);
+
+    expect($request->status)->toBe(ChangeRequestStatus::PreviewReady)
+        ->and($request->touched_paths)->toBe(['content/caffè.md', 'content/menù del giorno.md', 'layouts/perché.html']);
+    foreach ([...$this->fake->calls('git diff --name-only'), ...$this->fake->calls('git ls-files')] as $call) {
+        expect($call['argv'])->toContain('-z');
+    }
+});
+
 it('puts the repository\'s git configuration back as it was after the run', function (): void {
     $workspace = config('pipeline.workspace_root').'/'.$this->site['website']->id;
     $this->fake->on('claude', function (array $argv, string $cwd): App\Modules\Pipeline\Data\CommandResult {

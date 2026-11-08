@@ -57,6 +57,13 @@ final readonly class PathPolicy
      */
     public static function refuseAlways(string $path, bool $protectManifest = true): ?string
     {
+        // git -z hands a name over exactly as it is: one padded with spaces
+        // or holding a control character would otherwise be checked as
+        // another path (" content/x.js" is not under content/).
+        if ($path !== trim($path) || preg_match('/[\x01-\x1F\x7F]/', $path) === 1) {
+            return 'nome di file non valido';
+        }
+
         $path = self::normalise($path);
         if ($path === '' || $path === '.') {
             return 'percorso vuoto';

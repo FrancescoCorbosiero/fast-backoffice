@@ -38,6 +38,11 @@ it('always refuses hidden files, escapes, the pipeline files and the files that 
     ['requirements-dev.txt', 'file di build o configurazione'],
     ['Makefile', 'file di build o configurazione'],
     ['', 'percorso vuoto'],
+    // git -z hands names over exactly: " content/x.js" is a folder called " content", not content/.
+    [' content/x.js', 'nome di file non valido'],
+    ['content/x.md ', 'nome di file non valido'],
+    ["content/a\tb.md", 'nome di file non valido'],
+    ["content/a\nb.md", 'nome di file non valido'],
 ]);
 
 it('lets onboarding write exactly the two pipeline files', function (): void {

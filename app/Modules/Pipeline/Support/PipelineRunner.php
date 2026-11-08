@@ -176,17 +176,19 @@ final readonly class PipelineRunner
     /**
      * Paths changed between two refs, plus (optionally) what the working
      * tree holds uncommitted: modified, untracked, and untracked-but-ignored
-     * (an agent's write to .env or dist/ is a change too).
+     * (an agent's write to .env or dist/ is a change too). Read with -z:
+     * otherwise git quotes any path with a byte above 0x7F
+     * ("content/caff\303\250.md") and the gate would match nothing.
      *
      * @return list<string>
      */
     public function touched(string $dir, string $from, string $to, bool $includeWorkingTree = false): array
     {
-        $paths = $this->lines($this->gitOrFail($dir, ['diff', '--name-only', '--no-renames', $from.'...'.$to])->stdout);
+        $paths = $this->paths($this->gitOrFail($dir, ['diff', '--name-only', '-z', '--no-renames', $from.'...'.$to])->stdout);
         if ($includeWorkingTree) {
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['diff', '--name-only', '--no-renames', 'HEAD'])->stdout)];
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['ls-files', '--others', '--exclude-standard'])->stdout)];
-            $paths = [...$paths, ...$this->lines($this->gitOrFail($dir, ['ls-files', '--others', '--ignored', '--exclude-standard'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['diff', '--name-only', '-z', '--no-renames', 'HEAD'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['ls-files', '-z', '--others', '--exclude-standard'])->stdout)];
+            $paths = [...$paths, ...$this->paths($this->gitOrFail($dir, ['ls-files', '-z', '--others', '--ignored', '--exclude-standard'])->stdout)];
         }
 
         return array_values(array_unique($paths));
@@ -332,10 +334,13 @@ final readonly class PipelineRunner
     }
 
     /**
+     * git's -z output: NUL-terminated paths, neither quoted nor trimmed
+     * (a name may start or end with a space).
+     *
      * @return list<string>
      */
-    private function lines(string $output): array
+    private function paths(string $output): array
     {
-        return array_values(array_filter(array_map('trim', explode("\n", $output)), fn (string $line): bool => $line !== ''));
+        return array_values(array_filter(explode("\0", $output), fn (string $path): bool => $path !== ''));
     }
 }

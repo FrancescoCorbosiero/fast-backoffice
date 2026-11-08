@@ -157,13 +157,13 @@ final class FakeCommandRunner implements CommandRunner
             return self::ok((string) $this->commitsAhead."\n");
         }
         if ($command === 'diff' && in_array('--name-only', $args, true)) {
-            return self::ok(implode("\n", $this->touched)."\n");
+            return self::ok(self::listing($this->touched, $args));
         }
         if ($command === 'diff') {
             return self::ok(" content/orari.md | 2 +-\n");
         }
         if ($command === 'ls-files') {
-            return self::ok(implode("\n", in_array('--ignored', $args, true) ? $this->ignored : $this->untracked)."\n");
+            return self::ok(self::listing(in_array('--ignored', $args, true) ? $this->ignored : $this->untracked, $args));
         }
         if ($command === 'log') {
             return self::ok("abc1234 Aggiorna gli orari del sabato\n");
@@ -181,5 +181,45 @@ final class FakeCommandRunner implements CommandRunner
         }
 
         return self::ok();
+    }
+
+    /**
+     * A list of paths the way git prints it: each one NUL-terminated with
+     * -z, otherwise one per line with core.quotePath's C-style quoting of
+     * anything unusual (bytes above 0x7F, control characters, quotes and
+     * backslashes), so "caffè.md" comes out as "caff\303\250.md".
+     *
+     * @param  list<string>  $paths
+     * @param  list<string>  $args
+     */
+    private static function listing(array $paths, array $args): string
+    {
+        if (in_array('-z', $args, true)) {
+            return implode('', array_map(fn (string $path): string => $path."\0", $paths));
+        }
+
+        return implode('', array_map(fn (string $path): string => self::quoted($path)."\n", $paths));
+    }
+
+    private static function quoted(string $path): string
+    {
+        if (preg_match('/[\x00-\x1F\x7F-\xFF"\\\\]/', $path) !== 1) {
+            return $path;
+        }
+
+        $quoted = '';
+        foreach (str_split($path) as $char) {
+            $byte = ord($char);
+            $quoted .= match (true) {
+                $char === '"' => '\\"',
+                $char === '\\' => '\\\\',
+                $char === "\t" => '\\t',
+                $char === "\n" => '\\n',
+                $byte < 0x20 || $byte >= 0x7F => sprintf('\\%03o', $byte),
+                default => $char,
+            };
+        }
+
+        return '"'.$quoted.'"';
     }
 }
